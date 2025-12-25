@@ -27,30 +27,39 @@ export const register = async (req, res) => {
 // 📌 LOGIN
 export const login = async (req, res) => {
   try {
+    console.log("📥 Login Request:", req.body);
+
     const { email, password } = req.body;
+    if (!email || !password) {
+      console.log("❌ Missing Fields");
+      return res.status(400).json({ message: "Email & password required" });
+    }
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "User not found ❌" });
+    if (!user) {
+      console.log("❌ User not found");
+      return res.status(400).json({ message: "User not found ❌" });
+    }
 
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(400).json({ message: "Incorrect password ❌" });
+    if (!match) {
+      console.log("❌ Wrong password");
+      return res.status(400).json({ message: "Incorrect password ❌" });
+    }
 
+    console.log("🔑 JWT SECRET:", process.env.JWT_SECRET); // 👈 CHECK THIS!!!
+    
     const token = jwt.sign(
       { id: user._id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE }
+      { expiresIn: process.env.JWT_EXPIRE || "1d" }
     );
 
-    res.json({
-      message: "Login successful 🎉",
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      }
-    });
+    res.json({ message: "Login successful 🎉", token });
+    
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.log("🔥 SERVER LOGIN ERROR:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
