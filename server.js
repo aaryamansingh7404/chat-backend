@@ -11,46 +11,62 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
+    methods: ["GET", "POST"],
   },
 });
 
 io.on("connection", (socket) => {
   console.log("🔥 USER CONNECTED:", socket.id);
 
+  /* 🏠 JOIN ROOM */
   socket.on("joinRoom", (roomId) => {
     socket.join(roomId);
-    console.log("📌 User joined:", roomId);
+    console.log(`📌 User Joined Room: ${roomId}`);
+
+    // confirm join
+    io.to(roomId).emit("roomJoined", {
+      message: `User connected to room: ${roomId}`,
+      socketId: socket.id,
+    });
   });
 
-  // ✍️ Typing Indicator
+  /* ✍️ TYPING INDICATOR */
   socket.on("typingState", ({ roomId, userName, typing }) => {
     socket.to(roomId).emit("typingState", { userName, typing });
   });
 
-  // 📩 Message Send
+  /* 📨 SEND MESSAGE */
   socket.on("sendMessage", ({ roomId, message }) => {
+    console.log("📩 New Message:", message);
     io.to(roomId).emit("receiveMessage", message);
   });
 
-  // ✔️ Delivered (double tick)
+  /* ✔✔ MESSAGE DELIVERED */
   socket.on("messageDelivered", ({ roomId, messageId }) => {
+    console.log("🚚 Delivered:", messageId);
     io.to(roomId).emit("updateMessageStatus", {
       id: messageId,
       status: "delivered",
     });
   });
 
-  // 👀 Seen (blue tick)
-  socket.on("seenMessages", ({ roomId }) => {
-    io.to(roomId).emit("updateAllSeen");
+  /* 👀 MESSAGE SEEN (BLUE TICK FOR ALL MESSAGES SENT BY ME) */
+  socket.on("seenMessages", ({ roomId, userName }) => {
+    console.log(`👀 Seen by: ${userName} in Room: ${roomId}`);
+
+    io.to(roomId).emit("updateAllSeen", {
+      seenBy: userName,
+    });
   });
 
+  /* ❌ DISCONNECT */
   socket.on("disconnect", () => {
     console.log("❌ USER DISCONNECTED:", socket.id);
   });
 });
 
-const PORT = 5000;
-server.listen(PORT, () =>
-  console.log(`🚀 Server running on port ${PORT}`)
-);
+/* 🚀 START SERVER */
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`⚡ Server Live on PORT ${PORT}`);
+});
