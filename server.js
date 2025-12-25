@@ -9,68 +9,45 @@ app.use(cors());
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
+  cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
 io.on("connection", (socket) => {
   console.log("🔥 USER CONNECTED:", socket.id);
 
-  /* 🏠 JOIN ROOM */
-  socket.on("joinRoom", (roomId) => {
+  socket.on("joinRoom", ({ roomId, userName }) => {
     socket.join(roomId);
-    console.log(`📌 User Joined Room: ${roomId}`);
+    console.log(`📌 ${userName} joined ${roomId}`);
 
-    io.to(roomId).emit("roomJoined", {
-      message: `User connected to room: ${roomId}`,
-      socketId: socket.id,
-    });
+    socket.to(roomId).emit("userJoined", userName);
   });
 
-  /* ✍️ TYPING INDICATOR */
-  socket.on("typingState", ({ roomId, userName, typing }) => {
-    socket.to(roomId).emit("typingState", { userName, typing });
-  });
-
-  /* 📨 SEND MESSAGE */
+  // SEND
   socket.on("sendMessage", ({ roomId, message }) => {
-    console.log("📩 New Message:", message.id);
     io.to(roomId).emit("receiveMessage", message);
   });
 
-  /* ✔✔ MESSAGE DELIVERED */
+  // DELIVERED
   socket.on("messageDelivered", ({ roomId, messageId }) => {
-    console.log("🚚 Delivered:", messageId);
-    
-    // Sirf delivered status update
     io.to(roomId).emit("updateMessageStatus", {
       id: messageId,
       status: "delivered",
     });
   });
 
-  /* 👀 MESSAGE SEEN (BLUE TICK) */
-  socket.on("seenMessages", ({ roomId, userName }) => {
-    console.log(`👀 Seen by: ${userName} in Room: ${roomId}`);
+  // SEEN (ONLY WHEN CHAT IS OPEN)
+  socket.on("chatOpened", ({ roomId, userName }) => {
+    console.log(`💙 ${userName} opened chat ${roomId}`);
 
-    // Sirf messages jinke sender != seen karne wala user
-    // unko blue tick banane ke liye seen broadcast
     io.to(roomId).emit("updateAllSeen", {
-      seenBy: userName,
       status: "seen",
+      seenBy: userName,
     });
   });
 
-  /* ❌ DISCONNECT */
   socket.on("disconnect", () => {
     console.log("❌ USER DISCONNECTED:", socket.id);
   });
 });
 
-/* 🚀 START SERVER */
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`⚡ Server Live on PORT ${PORT}`);
-});
+server.listen(5000, () => console.log("⚡ Server Live on 5000"));
