@@ -23,6 +23,8 @@ app.get("/", (req, res) => res.send("API Running... 🚀"));
 app.get("/profile", authMiddleware, (req, res) => {
   res.json({ message: "Protected Route Accessed 🔐", user: req.user });
 });
+
+const PORT = process.env.PORT || 5000;
 app.listen(process.env.PORT, () =>
   console.log(`🚀 REST API running on ${process.env.PORT}`)
 );
