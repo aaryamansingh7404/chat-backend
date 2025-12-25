@@ -6,56 +6,54 @@ import cors from "cors";
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
-import http from "http";               // ⭐ REQUIRED
-import { Server } from "socket.io";    // ⭐ REQUIRED
+import http from "http";
+import { Server } from "socket.io";
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// 🌐 DB CONNECT
+// DB
 connectDB();
 
-// 🛣 API Routes
+// Routes
 app.use("/api/auth", authRoutes);
 
-// 🏠 Test Route
 app.get("/", (req, res) => res.send("API Running... 🚀"));
 
-// 🔐 Protected Route
+// Protected Test
 app.get("/profile", authMiddleware, (req, res) => {
-  res.json({
-    message: "Protected Route Accessed 🔐",
-    user: req.user,
-  });
+  res.json({ message: "Protected 🔐", user: req.user });
 });
 
-// ⭐ Create HTTP Server for Socket.io
+// HTTP SERVER FOR SOCKET.IO
 const server = http.createServer(app);
-
-// ⭐ Initialize Socket.io
 const io = new Server(server, {
-  cors: {
-    origin: "*", // Allowed origin - can change in production
-    methods: ["GET", "POST"],
-  },
+  cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-// ⭐ SOCKET EVENTS ⭐
+// ⚡ USER ONLINE / OFFLINE + TICKS
 io.on("connection", (socket) => {
-  console.log("⚡ New Client Connected:", socket.id);
+  console.log("⚡ Client Connected:", socket.id);
 
-  // Join Room
-  socket.on("joinRoom", ({ roomId }) => {
+  socket.on("joinRoom", ({ roomId, userName }) => {
+    socket.userName = userName;
     socket.join(roomId);
+
+    // 🟢 ONLINE STATUS
+    io.emit("statusUpdate", {
+      userName,
+      status: "online",
+      lastSeen: null,
+    });
   });
 
-  // Send Message
+  // SEND MESSAGE
   socket.on("sendMessage", ({ roomId, message }) => {
     socket.to(roomId).emit("receiveMessage", message);
   });
 
-  // Delivered (2 ticks)
+  // DELIVERED
   socket.on("messageDelivered", ({ roomId, messageId }) => {
     io.to(roomId).emit("updateMessageStatus", {
       id: messageId,
@@ -63,19 +61,28 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Seen (Blue ticks)
+  // SEEN
   socket.on("chatOpened", ({ roomId }) => {
     io.to(roomId).emit("updateAllSeen");
   });
 
+  // 🔴 DISCONNECT → LAST SEEN
   socket.on("disconnect", () => {
-    console.log("❌ Client Disconnected");
-  });
+    const lastSeen = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
+    io.emit("statusUpdate", {
+      userName: socket.userName,
+      status: "offline",
+      lastSeen,
+    });
+
+    console.log("❌ Disconnected:", socket.id);
+  });
 });
 
-// 🎯 PORT
+// PORT
 const PORT = process.env.PORT || 5000;
-
-// 🚀 START SERVER
-server.listen(PORT, () => console.log(`🚀 Server with Socket.io on PORT ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Server live on ${PORT}`));
