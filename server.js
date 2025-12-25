@@ -1,11 +1,11 @@
+import dotenv from "dotenv";
+dotenv.config(); // Load .env 🔥
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
 
-dotenv.config(); // Load .env 🔥
 
 const app = express();
 app.use(express.json());
