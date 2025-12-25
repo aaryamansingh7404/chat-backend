@@ -2,7 +2,7 @@ import { User } from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-// 📌 REGISTER
+// ⭐ REGISTER
 export const register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -17,49 +17,33 @@ export const register = async (req, res) => {
     const hashedPass = await bcrypt.hash(password, 10);
     await User.create({ name, email, password: hashedPass });
 
-    res.status(201).json({ message: "Account created successfully 🎉" });
+    return res.status(201).json({ message: "Account created successfully 🎉" });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
 
-// 📌 LOGIN
-export const login = async (req, res) => {
-  try {
-    console.log("📥 Login Request:", req.body);
+// ⭐ DUMMY LOGIN (TEMP)
+export const loginUser = async (req, res) => {
+  const { email, password } = req.body;
 
-    const { email, password } = req.body;
-    if (!email || !password) {
-      console.log("❌ Missing Fields");
-      return res.status(400).json({ message: "Email & password required" });
-    }
+  const D_EMAIL = "admin@test.com";
+  const D_PASS = "123456";
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      console.log("❌ User not found");
-      return res.status(400).json({ message: "User not found ❌" });
-    }
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      console.log("❌ Wrong password");
-      return res.status(400).json({ message: "Incorrect password ❌" });
-    }
-
-    console.log("🔑 JWT SECRET:", process.env.JWT_SECRET); // 👈 CHECK THIS!!!
-    
-    const token = jwt.sign(
-      { id: user._id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE || "1d" }
-    );
-
-    res.json({ message: "Login successful 🎉", token });
-    
-  } catch (err) {
-    console.log("🔥 SERVER LOGIN ERROR:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+  // ⭐ Dummy Login Allow
+  if (email === D_EMAIL && password === D_PASS) {
+    return res.json({
+      success: true,
+      message: "Dummy Login Successful 🎉",
+      token: "dummy-token-123",
+      user: { name: "ASR", email: D_EMAIL },
+    });
   }
-};
 
+  // ❌ Otherwise reject
+  return res.status(401).json({
+    success: false,
+    message: "Invalid Dummy Credentials ❌",
+  });
+};
