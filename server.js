@@ -1,53 +1,28 @@
 import express from "express";
-import http from "http";
-import { Server } from "socket.io";
 import cors from "cors";
+import dotenv from "dotenv";
+import { connectDB } from "./config/db.js";
+import authRoutes from "./routes/authRoutes.js";
+import { authMiddleware } from "./middleware/authMiddleware.js";
+
+dotenv.config(); // Load .env 🔥
 
 const app = express();
+app.use(express.json());
 app.use(cors());
 
-const server = http.createServer(app);
+// DB Connect
+connectDB();
 
-const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
+// Routes
+app.use("/api/auth", authRoutes);
+
+
+app.get("/", (req, res) => res.send("API Running... 🚀"));
+
+app.get("/profile", authMiddleware, (req, res) => {
+  res.json({ message: "Protected Route Accessed 🔐", user: req.user });
 });
-
-io.on("connection", (socket) => {
-  console.log("🔥 USER CONNECTED:", socket.id);
-
-  socket.on("joinRoom", ({ roomId, userName }) => {
-    socket.join(roomId);
-    console.log(`📌 ${userName} joined ${roomId}`);
-
-    socket.to(roomId).emit("userJoined", userName);
-  });
-
-  // SEND
-  socket.on("sendMessage", ({ roomId, message }) => {
-    io.to(roomId).emit("receiveMessage", message);
-  });
-
-  // DELIVERED
-  socket.on("messageDelivered", ({ roomId, messageId }) => {
-    io.to(roomId).emit("updateMessageStatus", {
-      id: messageId,
-      status: "delivered",
-    });
-  });
-
-  // SEEN (ONLY WHEN CHAT IS OPEN)
-  socket.on("chatOpened", ({ roomId, userName }) => {
-    console.log(`💙 ${userName} opened chat ${roomId}`);
-
-    io.to(roomId).emit("updateAllSeen", {
-      status: "seen",
-      seenBy: userName,
-    });
-  });
-
-  socket.on("disconnect", () => {
-    console.log("❌ USER DISCONNECTED:", socket.id);
-  });
-});
-
-server.listen(5000, () => console.log("⚡ Server Live on 5000"));
+app.listen(process.env.PORT, () =>
+  console.log(`🚀 REST API running on ${process.env.PORT}`)
+);
