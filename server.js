@@ -15,32 +15,42 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-    console.log("🔥 USER CONNECTED:", socket.id);
-  
-    socket.on("joinRoom", (roomId) => {
-      socket.join(roomId);
-      console.log("✅ JOIN ROOM:", roomId);
-    });
-  
-    // ✅ NEW TYPING LOGIC (REQUIRED)
-    socket.on("typingState", ({ roomId, userName, typing }) => {
-      socket.to(roomId).emit("typingState", {
-        userName,
-        typing,
-      });
-    });
-  
-    socket.on("sendMessage", ({ roomId, message }) => {
-      io.to(roomId).emit("receiveMessage", message);
-    });
-  
-    socket.on("disconnect", () => {
-      console.log("❌ USER DISCONNECTED:", socket.id);
+  console.log("🔥 USER CONNECTED:", socket.id);
+
+  socket.on("joinRoom", (roomId) => {
+    socket.join(roomId);
+    console.log("📌 User joined:", roomId);
+  });
+
+  // ✍️ Typing Indicator
+  socket.on("typingState", ({ roomId, userName, typing }) => {
+    socket.to(roomId).emit("typingState", { userName, typing });
+  });
+
+  // 📩 Message Send
+  socket.on("sendMessage", ({ roomId, message }) => {
+    io.to(roomId).emit("receiveMessage", message);
+  });
+
+  // ✔️ Delivered (double tick)
+  socket.on("messageDelivered", ({ roomId, messageId }) => {
+    io.to(roomId).emit("updateMessageStatus", {
+      id: messageId,
+      status: "delivered",
     });
   });
-  
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  // 👀 Seen (blue tick)
+  socket.on("seenMessages", ({ roomId }) => {
+    io.to(roomId).emit("updateAllSeen");
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ USER DISCONNECTED:", socket.id);
+  });
 });
+
+const PORT = 5000;
+server.listen(PORT, () =>
+  console.log(`🚀 Server running on port ${PORT}`)
+);
