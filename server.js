@@ -23,7 +23,6 @@ io.on("connection", (socket) => {
     socket.join(roomId);
     console.log(`📌 User Joined Room: ${roomId}`);
 
-    // confirm join
     io.to(roomId).emit("roomJoined", {
       message: `User connected to room: ${roomId}`,
       socketId: socket.id,
@@ -37,25 +36,30 @@ io.on("connection", (socket) => {
 
   /* 📨 SEND MESSAGE */
   socket.on("sendMessage", ({ roomId, message }) => {
-    console.log("📩 New Message:", message);
+    console.log("📩 New Message:", message.id);
     io.to(roomId).emit("receiveMessage", message);
   });
 
   /* ✔✔ MESSAGE DELIVERED */
   socket.on("messageDelivered", ({ roomId, messageId }) => {
     console.log("🚚 Delivered:", messageId);
+    
+    // Sirf delivered status update
     io.to(roomId).emit("updateMessageStatus", {
       id: messageId,
       status: "delivered",
     });
   });
 
-  /* 👀 MESSAGE SEEN (BLUE TICK FOR ALL MESSAGES SENT BY ME) */
+  /* 👀 MESSAGE SEEN (BLUE TICK) */
   socket.on("seenMessages", ({ roomId, userName }) => {
     console.log(`👀 Seen by: ${userName} in Room: ${roomId}`);
 
+    // Sirf messages jinke sender != seen karne wala user
+    // unko blue tick banane ke liye seen broadcast
     io.to(roomId).emit("updateAllSeen", {
       seenBy: userName,
+      status: "seen",
     });
   });
 
