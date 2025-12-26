@@ -74,16 +74,18 @@ io.on("connection", (socket) => {
   socket.on("chatOpened", ({ user1, user2, opener }) => {
     const room = [user1.trim(), user2.trim()].sort().join("_");
   
+    const partner = opener === user1 ? user2 : user1;
+  
     io.to(room).emit("updateAllSeen", {
-      opener,               // 👈 jisne chat open kiya
-      sender: opener,       // 👈 opener is the reader
-      receiver: opener === user1 ? user2 : user1, // 👈 opposite person
+      opener,
+      receiver: partner,   // chatList logic ke liye correct
       status: "seen"
     });
   });
   
+  
 
-  // ⭐ DELIVERY ACK
+  //  DELIVERY ACK
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     const room = [sender, receiver].sort().join("_");
     io.to(room).emit("updateMessageStatus", {
@@ -94,7 +96,7 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ⭐ ONLINE
+  //  ONLINE
   socket.on("userOnline", ({ userName }) => {
     io.emit("statusUpdate", { userName, status: "online", lastSeen: null });
   });
