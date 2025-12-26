@@ -71,15 +71,17 @@ io.on("connection", (socket) => {
   });
 
   // ⭐ RECEIVER SEEN (chat open)
-  socket.on("chatOpened", ({ user1, user2 }) => {
+  socket.on("chatOpened", ({ user1, user2, opener }) => {
     const room = [user1.trim(), user2.trim()].sort().join("_");
+  
     io.to(room).emit("updateAllSeen", {
-      opener: user1,
-      sender: user2,
-      receiver: user1,
-      status: "seen",
+      opener,               // 👈 jisne chat open kiya
+      sender: opener,       // 👈 opener is the reader
+      receiver: opener === user1 ? user2 : user1, // 👈 opposite person
+      status: "seen"
     });
   });
+  
 
   // ⭐ DELIVERY ACK
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
