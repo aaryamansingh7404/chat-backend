@@ -14,104 +14,104 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// 📌 DB
+// ⭐ DB
 connectDB();
 
-// 📌 API ROUTES
+// ⭐ ROUTES
 app.use("/api/auth", authRoutes);
 app.get("/", (req, res) => res.send("API Running 🚀"));
 app.get("/profile", authMiddleware, (req, res) => {
-  res.json({ message: "Protected Route", user: req.user });
+  res.json({ message: "Protected", user: req.user });
 });
 
-// 📌 SOCKET SERVER SETUP
+// ⭐ SOCKET SERVER
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
+// ⚡ SOCKET LOGIC
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
-  // 🌟 USER IDENTIFICATION
   socket.on("initUser", ({ userName }) => {
     if (!userName) return;
     socket.userName = userName.trim();
     socket.join(socket.userName);
-    console.log("🏠 Personal Room:", socket.userName);
   });
 
-  // 🔗 PRIVATE CHAT ROOM JOIN
   socket.on("joinRoom", ({ user1, user2 }) => {
     if (!user1 || !user2) return;
-    const roomId = [user1.trim(), user2.trim()].sort().join("_");
-    socket.join(roomId);
-    console.log("🔗 Joined:", roomId);
+    const rid = [user1.trim(), user2.trim()].sort().join("_");
+    socket.join(rid);
   });
 
-  // 💬 SEND MESSAGE (Main Fix)
+  // ⭐ SEND MESSAGE
   socket.on("sendMessage", (msg) => {
     const { sender, receiver } = msg;
     if (!sender || !receiver) return;
 
-    const roomId = [sender.trim(), receiver.trim()].sort().join("_");
+    const room = [sender, receiver].sort().join("_");
 
-    io.to(roomId).emit("receiveMessage", msg);
-    io.to(receiver.trim()).emit("backgroundMessage", msg);
+    io.to(room).emit("receiveMessage", msg);
+    io.to(receiver).emit("backgroundMessage", msg);
 
     socket.emit("messageSentConfirm", { id: msg.id, status: "sent" });
+
+    // delivered if receiver active
+    const active = [...io.sockets.adapter.rooms.get(receiver) || []];
+    if (active.length > 0) {
+      io.to(room).emit("updateMessageStatus", {
+        id: msg.id,
+        sender,
+        receiver,
+        status: "delivered",
+      });
+    }
   });
 
-  // ✔ Delivered
-  socket.on("messageDelivered", ({ id, sender, receiver }) => {
-    const roomId = [sender.trim(), receiver.trim()].sort().join("_");
-    io.to(roomId).emit("updateMessageStatus", { id, status: "delivered" });
-  });
-
-  // ✔✔ Seen
-  socket.on("chatOpened", ({ user1, user2, opener }) => {
+  // ⭐ RECEIVER SEEN (chat open)
+  socket.on("chatOpened", ({ user1, user2 }) => {
     const room = [user1.trim(), user2.trim()].sort().join("_");
-    io.to(room).emit("updateAllSeen", { opener }); // who opened chat
+    io.to(room).emit("updateAllSeen", {
+      opener: user1,
+      sender: user2,
+      receiver: user1,
+      status: "seen",
+    });
   });
-  
 
-  // 🟢 ONLINE
+  // ⭐ DELIVERY ACK
+  socket.on("messageDelivered", ({ id, sender, receiver }) => {
+    const room = [sender, receiver].sort().join("_");
+    io.to(room).emit("updateMessageStatus", {
+      id,
+      sender,
+      receiver,
+      status: "delivered",
+    });
+  });
+
+  // ⭐ ONLINE
   socket.on("userOnline", ({ userName }) => {
-    io.emit("statusUpdate", {
-      userName: userName.trim(),
-      status: "online",
-      lastSeen: null,
-    });
+    io.emit("statusUpdate", { userName, status: "online", lastSeen: null });
   });
 
-  // 🔴 OFFLINE
+  // ⭐ OFFLINE
   socket.on("userOffline", ({ userName }) => {
-    const time = new Date().toLocaleTimeString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    io.emit("statusUpdate", {
-      userName: userName.trim(),
-      status: "offline",
-      lastSeen: time,
-    });
+    const time = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    io.emit("statusUpdate", { userName, status: "offline", lastSeen: time });
   });
 
-  // ❌ DISCONNECT
+  // ⭐ DISCONNECT
   socket.on("disconnect", () => {
     if (!socket.userName) return;
-    const time = new Date().toLocaleTimeString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const time = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
     io.emit("statusUpdate", {
       userName: socket.userName,
       status: "offline",
       lastSeen: time,
     });
-    console.log("❌ LEFT:", socket.userName);
   });
 });
 
