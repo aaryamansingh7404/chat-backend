@@ -14,54 +14,52 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// 📌 DB Connection
+// 📌 DB
 connectDB();
 
-// 📌 Routes
+// 📌 API ROUTES
 app.use("/api/auth", authRoutes);
 app.get("/", (req, res) => res.send("API Running 🚀"));
 app.get("/profile", authMiddleware, (req, res) => {
   res.json({ message: "Protected Route", user: req.user });
 });
 
-// 📌 SOCKET SERVER
+// 📌 SOCKET SERVER SETUP
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-// ⚡ SOCKET EVENTS
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
-  // 🛑 FIX → auto join user to personal room
+  // 🌟 USER IDENTIFICATION
   socket.on("initUser", ({ userName }) => {
+    if (!userName) return;
     socket.userName = userName.trim();
-    socket.join(userName.trim()); // personal inbox room
-    console.log("📥 personal room joined:", userName);
+    socket.join(socket.userName);
+    console.log("🏠 Personal Room:", socket.userName);
   });
 
-  // 🛑 FIX: Chat room ID should be same for both users
+  // 🔗 PRIVATE CHAT ROOM JOIN
   socket.on("joinRoom", ({ user1, user2 }) => {
     if (!user1 || !user2) return;
     const roomId = [user1.trim(), user2.trim()].sort().join("_");
     socket.join(roomId);
-    console.log("🔗 Joined room:", roomId);
+    console.log("🔗 Joined:", roomId);
   });
 
-  // 🟢 Send Message
-  socket.on("sendMessage", ({ sender, receiver, text, id, time }) => {
+  // 💬 SEND MESSAGE (Main Fix)
+  socket.on("sendMessage", (msg) => {
+    const { sender, receiver } = msg;
+    if (!sender || !receiver) return;
+
     const roomId = [sender.trim(), receiver.trim()].sort().join("_");
 
-    const message = { id, text, sender, time, status: "sent" };
+    io.to(roomId).emit("receiveMessage", msg);
+    io.to(receiver.trim()).emit("backgroundMessage", msg);
 
-    // 🔥 Send to chat screen (if open)
-    io.to(roomId).emit("receiveMessage", message);
-
-    // 📩 ALWAYS store in receiver personal inbox (background receive)
-    io.to(receiver.trim()).emit("backgroundMessage", message);
-
-    socket.emit("messageSentConfirm", { id, status: "sent" });
+    socket.emit("messageSentConfirm", { id: msg.id, status: "sent" });
   });
 
   // ✔ Delivered
@@ -76,7 +74,7 @@ io.on("connection", (socket) => {
     io.to(roomId).emit("updateAllSeen");
   });
 
-  // 🟢 Online
+  // 🟢 ONLINE
   socket.on("userOnline", ({ userName }) => {
     io.emit("statusUpdate", {
       userName: userName.trim(),
@@ -85,14 +83,13 @@ io.on("connection", (socket) => {
     });
   });
 
-  // 🔴 Offline
+  // 🔴 OFFLINE
   socket.on("userOffline", ({ userName }) => {
-    const time = new Date().toLocaleString("en-IN", {
+    const time = new Date().toLocaleTimeString("en-IN", {
       timeZone: "Asia/Kolkata",
       hour: "2-digit",
       minute: "2-digit",
     });
-
     io.emit("statusUpdate", {
       userName: userName.trim(),
       status: "offline",
@@ -100,22 +97,20 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ❌ Disconnect
+  // ❌ DISCONNECT
   socket.on("disconnect", () => {
     if (!socket.userName) return;
-    const time = new Date().toLocaleString("en-IN", {
+    const time = new Date().toLocaleTimeString("en-IN", {
       timeZone: "Asia/Kolkata",
       hour: "2-digit",
       minute: "2-digit",
     });
-
     io.emit("statusUpdate", {
       userName: socket.userName,
       status: "offline",
       lastSeen: time,
     });
-
-    console.log("❌ AUTO OFFLINE:", socket.userName, time);
+    console.log("❌ LEFT:", socket.userName);
   });
 });
 
