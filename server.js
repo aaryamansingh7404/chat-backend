@@ -34,26 +34,58 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
-  socket.on("joinRoom", ({ roomId, userName }) => {
+  // 🛑 FIX → auto join user to personal room
+  socket.on("initUser", ({ userName }) => {
     socket.userName = userName.trim();
+    socket.join(userName.trim()); // personal inbox room
+    console.log("📥 personal room joined:", userName);
+  });
+
+  // 🛑 FIX: Chat room ID should be same for both users
+  socket.on("joinRoom", ({ user1, user2 }) => {
+    if (!user1 || !user2) return;
+    const roomId = [user1.trim(), user2.trim()].sort().join("_");
     socket.join(roomId);
-
-    io.emit("statusUpdate", {
-      userName: socket.userName,
-      status: "online",
-      lastSeen: null,
-    });
+    console.log("🔗 Joined room:", roomId);
   });
 
+  // 🟢 Send Message
+  socket.on("sendMessage", ({ sender, receiver, text, id, time }) => {
+    const roomId = [sender.trim(), receiver.trim()].sort().join("_");
+
+    const message = { id, text, sender, time, status: "sent" };
+
+    // 🔥 Send to chat screen (if open)
+    io.to(roomId).emit("receiveMessage", message);
+
+    // 📩 ALWAYS store in receiver personal inbox (background receive)
+    io.to(receiver.trim()).emit("backgroundMessage", message);
+
+    socket.emit("messageSentConfirm", { id, status: "sent" });
+  });
+
+  // ✔ Delivered
+  socket.on("messageDelivered", ({ id, sender, receiver }) => {
+    const roomId = [sender.trim(), receiver.trim()].sort().join("_");
+    io.to(roomId).emit("updateMessageStatus", { id, status: "delivered" });
+  });
+
+  // ✔✔ Seen
+  socket.on("chatOpened", ({ user1, user2 }) => {
+    const roomId = [user1.trim(), user2.trim()].sort().join("_");
+    io.to(roomId).emit("updateAllSeen");
+  });
+
+  // 🟢 Online
   socket.on("userOnline", ({ userName }) => {
-    socket.userName = userName.trim();
     io.emit("statusUpdate", {
-      userName: socket.userName,
+      userName: userName.trim(),
       status: "online",
       lastSeen: null,
     });
   });
 
+  // 🔴 Offline
   socket.on("userOffline", ({ userName }) => {
     const time = new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
@@ -66,32 +98,11 @@ io.on("connection", (socket) => {
       status: "offline",
       lastSeen: time,
     });
-
-    console.log("⏹ OFFLINE:", userName, time);
   });
 
-  // 🟢 SEND MESSAGE
-  socket.on("sendMessage", ({ roomId, message }) => {
-    socket.to(roomId).emit("receiveMessage", message);
-    socket.emit("messageSentConfirm", { id: message.id, status: "sent" }); // ✔️
-  });
-
-  // 🟡 DELIVERED
-  socket.on("messageDelivered", ({ roomId, messageId }) => {
-    io.to(roomId).emit("updateMessageStatus", {
-      id: messageId,
-      status: "delivered",
-    });
-  });
-
-  // 🔵 SEEN
-  socket.on("chatOpened", ({ roomId }) => {
-    io.to(roomId).emit("updateAllSeen");
-  });
-
+  // ❌ Disconnect
   socket.on("disconnect", () => {
     if (!socket.userName) return;
-
     const time = new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
       hour: "2-digit",
