@@ -14,17 +14,17 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// DB
+// 📌 DB Connection
 connectDB();
 
-// Routes
+// 📌 Routes
 app.use("/api/auth", authRoutes);
 app.get("/", (req, res) => res.send("API Running 🚀"));
 app.get("/profile", authMiddleware, (req, res) => {
   res.json({ message: "Protected Route", user: req.user });
 });
 
-// SOCKET SERVER
+// 📌 SOCKET SERVER
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
@@ -55,7 +55,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("userOffline", ({ userName }) => {
-    const time = new Date().toLocaleTimeString([], {
+    const time = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -66,13 +67,16 @@ io.on("connection", (socket) => {
       lastSeen: time,
     });
 
-    console.log("⏹ MANUAL OFFLINE:", userName, time);
+    console.log("⏹ OFFLINE:", userName, time);
   });
 
+  // 🟢 SEND MESSAGE
   socket.on("sendMessage", ({ roomId, message }) => {
     socket.to(roomId).emit("receiveMessage", message);
+    socket.emit("messageSentConfirm", { id: message.id, status: "sent" }); // ✔️
   });
 
+  // 🟡 DELIVERED
   socket.on("messageDelivered", ({ roomId, messageId }) => {
     io.to(roomId).emit("updateMessageStatus", {
       id: messageId,
@@ -80,6 +84,7 @@ io.on("connection", (socket) => {
     });
   });
 
+  // 🔵 SEEN
   socket.on("chatOpened", ({ roomId }) => {
     io.to(roomId).emit("updateAllSeen");
   });
@@ -92,7 +97,6 @@ io.on("connection", (socket) => {
       hour: "2-digit",
       minute: "2-digit",
     });
-    
 
     io.emit("statusUpdate", {
       userName: socket.userName,
@@ -105,4 +109,4 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`🚀 Server ready @ ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Server running @ ${PORT}`));
