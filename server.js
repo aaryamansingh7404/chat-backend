@@ -69,10 +69,11 @@ io.on("connection", (socket) => {
   });
 
   // ✔✔ Seen
-  socket.on("chatOpened", ({ user1, user2 }) => {
-    const roomId = [user1.trim(), user2.trim()].sort().join("_");
-    io.to(roomId).emit("updateAllSeen");
+  socket.on("chatOpened", ({ user1, user2, opener }) => {
+    const room = [user1.trim(), user2.trim()].sort().join("_");
+    io.to(room).emit("updateAllSeen", { opener }); // who opened chat
   });
+  
 
   // 🟢 ONLINE
   socket.on("userOnline", ({ userName }) => {
