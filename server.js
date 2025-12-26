@@ -87,10 +87,12 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     if (!socket.userName) return;
 
-    const time = new Date().toLocaleTimeString([], {
+    const time = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
       hour: "2-digit",
       minute: "2-digit",
     });
+    
 
     io.emit("statusUpdate", {
       userName: socket.userName,
