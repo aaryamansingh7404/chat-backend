@@ -3,11 +3,12 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
+import http from "http";
+import { Server } from "socket.io";
+
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
-import http from "http";
-import { Server } from "socket.io";
 
 const app = express();
 app.use(express.json());
@@ -18,25 +19,21 @@ connectDB();
 
 // Routes
 app.use("/api/auth", authRoutes);
-
-app.get("/", (req, res) => res.send("API Running... 🚀"));
-
-// Protected Test
+app.get("/", (req, res) => res.send("API Running 🚀"));
 app.get("/profile", authMiddleware, (req, res) => {
-  res.json({ message: "Protected 🔐", user: req.user });
+  res.json({ message: "Protected Route", user: req.user });
 });
 
-// HTTP SERVER + SOCKET.IO
+// SOCKET SERVER
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-// ⚡ PRESENCE + MESSAGE STATUS
+// ⚡ SOCKET EVENTS
 io.on("connection", (socket) => {
-  console.log("⚡ New Client:", socket.id);
+  console.log("⚡ Connected:", socket.id);
 
-  // USER JOIN
   socket.on("joinRoom", ({ roomId, userName }) => {
     socket.userName = userName.trim();
     socket.join(roomId);
@@ -48,7 +45,6 @@ io.on("connection", (socket) => {
     });
   });
 
-  // USER ONLINE
   socket.on("userOnline", ({ userName }) => {
     socket.userName = userName.trim();
     io.emit("statusUpdate", {
@@ -58,12 +54,25 @@ io.on("connection", (socket) => {
     });
   });
 
-  // SEND MESSAGE
+  socket.on("userOffline", ({ userName }) => {
+    const time = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    io.emit("statusUpdate", {
+      userName: userName.trim(),
+      status: "offline",
+      lastSeen: time,
+    });
+
+    console.log("⏹ MANUAL OFFLINE:", userName, time);
+  });
+
   socket.on("sendMessage", ({ roomId, message }) => {
     socket.to(roomId).emit("receiveMessage", message);
   });
 
-  // DELIVERED
   socket.on("messageDelivered", ({ roomId, messageId }) => {
     io.to(roomId).emit("updateMessageStatus", {
       id: messageId,
@@ -71,16 +80,14 @@ io.on("connection", (socket) => {
     });
   });
 
-  // SEEN
   socket.on("chatOpened", ({ roomId }) => {
     io.to(roomId).emit("updateAllSeen");
   });
 
-  // DISCONNECT → LAST SEEN
   socket.on("disconnect", () => {
     if (!socket.userName) return;
 
-    const lastSeenTime = new Date().toLocaleTimeString([], {
+    const time = new Date().toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -88,13 +95,12 @@ io.on("connection", (socket) => {
     io.emit("statusUpdate", {
       userName: socket.userName,
       status: "offline",
-      lastSeen: lastSeenTime,
+      lastSeen: time,
     });
 
-    console.log("❌ Disconnected:", socket.userName, lastSeenTime);
+    console.log("❌ AUTO OFFLINE:", socket.userName, time);
   });
 });
 
-// PORT
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`🚀 Server ready on ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Server ready @ ${PORT}`));
