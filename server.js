@@ -42,27 +42,27 @@ io.on("connection", (socket) => {
     socket.join(rid);
   });
 
-  // ⭐ SEND MESSAGE
+  // ⭐ SEND MESSAGE (Final Logic)
   socket.on("sendMessage", (msg) => {
     const { sender, receiver } = msg;
     if (!sender || !receiver) return;
 
     const room = [sender, receiver].sort().join("_");
+
+    // 📩 Send message to chat room users
     io.to(room).emit("receiveMessage", msg);
 
+    // 🎯 background notification only if not in room
     const isReceiverInRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
     if (!isReceiverInRoom) {
       io.to(receiver).emit("backgroundMessage", msg);
     }
 
+    // 🚀 Sender confirmation
     socket.emit("messageSentConfirm", { id: msg.id, status: "sent" });
   });
 
-  // ⭐ LAST MESSAGE UPDATE FOR SENDER CHATLIST
-  socket.on("pushLastMessageToList", (data) => {
-    io.to(data.sender).emit("lastMessageUpdate", data);
-  });
-
+  // ⭐ DELIVERED WHEN RECEIVER CONFIRMS MESSAGE ARRIVAL
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     const room = [sender, receiver].sort().join("_");
     io.to(room).emit("updateMessageStatus", {
@@ -73,16 +73,22 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("chatOpened", ({ opener, partner }) => {
-    if (!opener || !partner) return;
-    const room = [opener.trim(), partner.trim()].sort().join("_");
-    io.to(room).emit("updateAllSeen", {
-      opener,
-      receiver: opener,
-      partner,
-      status: "seen"
-    });
+  
+  // ⭐ Seen ONLY when the real receiver opens chat
+socket.on("chatOpened", ({ opener, partner }) => {
+  if (!opener || !partner) return;
+
+  const room = [opener.trim(), partner.trim()].sort().join("_");
+
+  // 👉 Only the receiver of messages can mark them seen
+  io.to(room).emit("updateAllSeen", {
+    opener,        // jisne chat khola
+    receiver: opener,  // ye hi dekh raha hai
+    partner,       // jisko message bheja tha
+    status: "seen"
   });
+});
+
 
   socket.on("userOnline", ({ userName }) => {
     io.emit("statusUpdate", { userName, status: "online", lastSeen: null });
