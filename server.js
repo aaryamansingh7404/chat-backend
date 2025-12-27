@@ -42,46 +42,27 @@ io.on("connection", (socket) => {
     socket.join(rid);
   });
 
-  // ⭐ SEND MESSAGE (FIX APPLIED)
+  // ⭐ SEND MESSAGE (Final Logic)
   socket.on("sendMessage", (msg) => {
     const { sender, receiver } = msg;
     if (!sender || !receiver) return;
 
     const room = [sender, receiver].sort().join("_");
 
-    // 📩 Always send in room
+    // 📩 Send message to chat room users
     io.to(room).emit("receiveMessage", msg);
 
-    // 🎯 backgroundMessage only if receiver NOT in room
+    // 🎯 background notification only if not in room
     const isReceiverInRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
     if (!isReceiverInRoom) {
       io.to(receiver).emit("backgroundMessage", msg);
     }
 
+    // 🚀 Sender confirmation
     socket.emit("messageSentConfirm", { id: msg.id, status: "sent" });
-
-    const active = [...io.sockets.adapter.rooms.get(receiver) || []];
-    if (active.length > 0) {
-      io.to(room).emit("updateMessageStatus", {
-        id: msg.id,
-        sender,
-        receiver,
-        status: "delivered",
-      });
-    }
   });
 
-  socket.on("chatOpened", ({ user1, user2, opener }) => {
-    const room = [user1.trim(), user2.trim()].sort().join("_");
-    const partner = opener === user1 ? user2 : user1;
-
-    io.to(room).emit("updateAllSeen", {
-      opener,
-      receiver: partner,
-      status: "seen"
-    });
-  });
-
+  // ⭐ DELIVERED WHEN RECEIVER CONFIRMS MESSAGE ARRIVAL
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     const room = [sender, receiver].sort().join("_");
     io.to(room).emit("updateMessageStatus", {
@@ -89,6 +70,17 @@ io.on("connection", (socket) => {
       sender,
       receiver,
       status: "delivered",
+    });
+  });
+
+  // ⭐ SEEN WHEN CHAT OPEN
+  socket.on("chatOpened", ({ user1, user2, opener }) => {
+    const room = [user1.trim(), user2.trim()].sort().join("_");
+    const partner = opener === user1 ? user2 : user1;
+    io.to(room).emit("updateAllSeen", {
+      opener,
+      receiver: partner,
+      status: "seen"
     });
   });
 
