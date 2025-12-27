@@ -30,21 +30,21 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
-  // 🟢 USER INIT
+  // USER INIT
   socket.on("initUser", ({ userName }) => {
     if (!userName) return;
     socket.userName = userName.trim();
     socket.join(socket.userName);
   });
 
-  // 🟢 JOIN ROOM
+  // JOIN ROOM
   socket.on("joinRoom", ({ user1, user2 }) => {
     if (!user1 || !user2) return;
     const room = [user1.trim(), user2.trim()].sort().join("_");
     socket.join(room);
   });
 
-  // 🟢 SEND MESSAGE
+  // SEND MESSAGE
   socket.on("sendMessage", (msg) => {
     const { sender, receiver, forList } = msg;
     if (!sender || !receiver) return;
@@ -69,45 +69,34 @@ io.on("connection", (socket) => {
     });
   });
 
-  // 🟢 DELIVERED
+  // DELIVERED
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     const room = [sender.trim(), receiver.trim()].sort().join("_");
     io.to(room).emit("updateMessageStatus", { id, sender, receiver, status: "delivered" });
   });
 
-  // 🟢 SEEN
+  // ⭐ FIXED SEEN ⭐
   socket.on("chatOpened", ({ opener, partner }) => {
     if (!opener || !partner) return;
     const room = [opener.trim(), partner.trim()].sort().join("_");
-    io.to(room).emit("updateAllSeen", {
-      opener,
-      partner,
-      status: "seen",
-    });
+
+    io.to(room).emit("updateAllSeen", { opener, partner });
+    io.to(opener).emit("updateAllSeen", { opener, partner });
+    io.to(partner).emit("updateAllSeen", { opener, partner });
   });
 
-  // ⭐⭐⭐ NEW: UPDATE CHATLIST PREVIEW ⭐⭐⭐
+  // CHATLIST PREVIEW
   socket.on("updateChatListPreview", ({ user1, user2, lastMsg, time }) => {
     if (!user1 || !user2) return;
 
     const room = [user1.trim(), user2.trim()].sort().join("_");
 
-    // Send to both users' chatlist
-    io.to(user1).emit("updateChatListPreview", {
-      user1, user2, lastMsg, time
-    });
-    io.to(user2).emit("updateChatListPreview", {
-      user1, user2, lastMsg, time
-    });
-
-    // Extra: If both are in chat, ensure sync
-    io.to(room).emit("updateChatListPreview", {
-      user1, user2, lastMsg, time
-    });
+    io.to(user1).emit("updateChatListPreview", { user1, user2, lastMsg, time });
+    io.to(user2).emit("updateChatListPreview", { user1, user2, lastMsg, time });
+    io.to(room).emit("updateChatListPreview", { user1, user2, lastMsg, time });
   });
-  // ⭐⭐⭐ END NEW ⭐⭐⭐
 
-  // 🟢 ONLINE / OFFLINE
+  // ONLINE / OFFLINE
   socket.on("userOnline", ({ userName }) => {
     io.emit("statusUpdate", { userName, status: "online", lastSeen: null });
   });
