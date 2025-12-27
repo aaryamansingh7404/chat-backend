@@ -80,15 +80,15 @@ io.on("connection", (socket) => {
   });
 
   // 🟢 SEEN: Only when real receiver opens chat
-  socket.on("chatOpened", ({ opener, partner }) => {
-    if (!opener || !partner) return;
-    const room = [opener.trim(), partner.trim()].sort().join("_");
+  socket.on("chatOpened", ({ user1, user2 }) => {
+    const room = [user1.trim(), user2.trim()].sort().join("_");
+  
     io.to(room).emit("updateAllSeen", {
-      opener,
-      partner,
-      status: "seen",
+      opener: user1,     // jiska screen currently open
+      partner: user2,    // jisko messages bheje the
     });
   });
+  
 
   // 🟢 ONLINE / OFFLINE STATUS
   socket.on("userOnline", ({ userName }) => {
