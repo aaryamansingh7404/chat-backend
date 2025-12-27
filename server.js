@@ -14,23 +14,19 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ⭐ DB
 connectDB();
 
-// ⭐ ROUTES
 app.use("/api/auth", authRoutes);
 app.get("/", (req, res) => res.send("API Running 🚀"));
 app.get("/profile", authMiddleware, (req, res) => {
   res.json({ message: "Protected", user: req.user });
 });
 
-// ⭐ SOCKET SERVER
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-// ⚡ SOCKET LOGIC
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
@@ -46,19 +42,24 @@ io.on("connection", (socket) => {
     socket.join(rid);
   });
 
-  // ⭐ SEND MESSAGE
+  // ⭐ SEND MESSAGE (FIX APPLIED)
   socket.on("sendMessage", (msg) => {
     const { sender, receiver } = msg;
     if (!sender || !receiver) return;
 
     const room = [sender, receiver].sort().join("_");
 
+    // 📩 Always send in room
     io.to(room).emit("receiveMessage", msg);
-    io.to(receiver).emit("backgroundMessage", msg);
+
+    // 🎯 backgroundMessage only if receiver NOT in room
+    const isReceiverInRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
+    if (!isReceiverInRoom) {
+      io.to(receiver).emit("backgroundMessage", msg);
+    }
 
     socket.emit("messageSentConfirm", { id: msg.id, status: "sent" });
 
-    // delivered if receiver active
     const active = [...io.sockets.adapter.rooms.get(receiver) || []];
     if (active.length > 0) {
       io.to(room).emit("updateMessageStatus", {
@@ -70,22 +71,17 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ⭐ RECEIVER SEEN (chat open)
   socket.on("chatOpened", ({ user1, user2, opener }) => {
     const room = [user1.trim(), user2.trim()].sort().join("_");
-  
     const partner = opener === user1 ? user2 : user1;
-  
+
     io.to(room).emit("updateAllSeen", {
       opener,
-      receiver: partner,   // chatList logic ke liye correct
+      receiver: partner,
       status: "seen"
     });
   });
-  
-  
 
-  //  DELIVERY ACK
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     const room = [sender, receiver].sort().join("_");
     io.to(room).emit("updateMessageStatus", {
@@ -96,18 +92,15 @@ io.on("connection", (socket) => {
     });
   });
 
-  //  ONLINE
   socket.on("userOnline", ({ userName }) => {
     io.emit("statusUpdate", { userName, status: "online", lastSeen: null });
   });
 
-  // ⭐ OFFLINE
   socket.on("userOffline", ({ userName }) => {
     const time = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
     io.emit("statusUpdate", { userName, status: "offline", lastSeen: time });
   });
 
-  // ⭐ DISCONNECT
   socket.on("disconnect", () => {
     if (!socket.userName) return;
     const time = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
