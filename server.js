@@ -44,28 +44,24 @@ io.on("connection", (socket) => {
     socket.join(room);
   });
 
-  // 🟢 SEND MESSAGE (FINAL & CLEAN)
+  // 🟢 SEND MESSAGE
   socket.on("sendMessage", (msg) => {
     const { sender, receiver, forList } = msg;
     if (!sender || !receiver) return;
 
     const room = [sender.trim(), receiver.trim()].sort().join("_");
 
-    // 👉 Realtime emit to both in chat room
     io.to(room).emit("receiveMessage", msg);
 
-    // 👉 For sender chatlist update
     if (forList) {
       io.to(sender).emit("receiveMessage", { ...msg, fromSelf: true });
     }
 
-    // 👉 If receiver is not in room (background)
     const inRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
     if (!inRoom) {
       io.to(receiver).emit("backgroundMessage", msg);
     }
 
-    // 👉 Confirm back to sender
     socket.emit("messageSentConfirm", {
       id: msg.id,
       status: "sent",
@@ -73,13 +69,13 @@ io.on("connection", (socket) => {
     });
   });
 
-  // 🟢 DELIVERED: Receiver got msg
+  // 🟢 DELIVERED
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     const room = [sender.trim(), receiver.trim()].sort().join("_");
     io.to(room).emit("updateMessageStatus", { id, sender, receiver, status: "delivered" });
   });
 
-  // 🟢 SEEN: Only when real receiver opens chat
+  // 🟢 SEEN
   socket.on("chatOpened", ({ opener, partner }) => {
     if (!opener || !partner) return;
     const room = [opener.trim(), partner.trim()].sort().join("_");
@@ -90,7 +86,28 @@ io.on("connection", (socket) => {
     });
   });
 
-  // 🟢 ONLINE / OFFLINE STATUS
+  // ⭐⭐⭐ NEW: UPDATE CHATLIST PREVIEW ⭐⭐⭐
+  socket.on("updateChatListPreview", ({ user1, user2, lastMsg, time }) => {
+    if (!user1 || !user2) return;
+
+    const room = [user1.trim(), user2.trim()].sort().join("_");
+
+    // Send to both users' chatlist
+    io.to(user1).emit("updateChatListPreview", {
+      user1, user2, lastMsg, time
+    });
+    io.to(user2).emit("updateChatListPreview", {
+      user1, user2, lastMsg, time
+    });
+
+    // Extra: If both are in chat, ensure sync
+    io.to(room).emit("updateChatListPreview", {
+      user1, user2, lastMsg, time
+    });
+  });
+  // ⭐⭐⭐ END NEW ⭐⭐⭐
+
+  // 🟢 ONLINE / OFFLINE
   socket.on("userOnline", ({ userName }) => {
     io.emit("statusUpdate", { userName, status: "online", lastSeen: null });
   });
