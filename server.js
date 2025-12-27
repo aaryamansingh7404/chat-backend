@@ -73,16 +73,22 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ⭐ SEEN WHEN CHAT OPEN
-  socket.on("chatOpened", ({ user1, user2, opener }) => {
-    const room = [user1.trim(), user2.trim()].sort().join("_");
-    const partner = opener === user1 ? user2 : user1;
-    io.to(room).emit("updateAllSeen", {
-      opener,
-      receiver: partner,
-      status: "seen"
-    });
+  
+  // ⭐ Seen ONLY when the real receiver opens chat
+socket.on("chatOpened", ({ opener, partner }) => {
+  if (!opener || !partner) return;
+
+  const room = [opener.trim(), partner.trim()].sort().join("_");
+
+  // 👉 Only the receiver of messages can mark them seen
+  io.to(room).emit("updateAllSeen", {
+    opener,        // jisne chat khola
+    receiver: opener,  // ye hi dekh raha hai
+    partner,       // jisko message bheja tha
+    status: "seen"
   });
+});
+
 
   socket.on("userOnline", ({ userName }) => {
     io.emit("statusUpdate", { userName, status: "online", lastSeen: null });
