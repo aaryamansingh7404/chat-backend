@@ -30,78 +30,85 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
+  // 🟢 USER INIT
   socket.on("initUser", ({ userName }) => {
     if (!userName) return;
     socket.userName = userName.trim();
     socket.join(socket.userName);
   });
 
+  // 🟢 JOIN ROOM
   socket.on("joinRoom", ({ user1, user2 }) => {
     if (!user1 || !user2) return;
-    const rid = [user1.trim(), user2.trim()].sort().join("_");
-    socket.join(rid);
+    const room = [user1.trim(), user2.trim()].sort().join("_");
+    socket.join(room);
   });
 
-  // ⭐ SEND MESSAGE (Final Logic)
+  // 🟢 SEND MESSAGE (FINAL & CLEAN)
   socket.on("sendMessage", (msg) => {
-    const { sender, receiver } = msg;
+    const { sender, receiver, forList } = msg;
     if (!sender || !receiver) return;
 
-    const room = [sender, receiver].sort().join("_");
+    const room = [sender.trim(), receiver.trim()].sort().join("_");
 
-    // 📩 Send message to chat room users
+    // 👉 Realtime emit to both in chat room
     io.to(room).emit("receiveMessage", msg);
 
-    // 🎯 background notification only if not in room
-    const isReceiverInRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
-    if (!isReceiverInRoom) {
+    // 👉 For sender chatlist update
+    if (forList) {
+      io.to(sender).emit("receiveMessage", { ...msg, fromSelf: true });
+    }
+
+    // 👉 If receiver is not in room (background)
+    const inRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
+    if (!inRoom) {
       io.to(receiver).emit("backgroundMessage", msg);
     }
 
-    // 🚀 Sender confirmation
-    socket.emit("messageSentConfirm", { id: msg.id, status: "sent" });
-  });
-
-  // ⭐ DELIVERED WHEN RECEIVER CONFIRMS MESSAGE ARRIVAL
-  socket.on("messageDelivered", ({ id, sender, receiver }) => {
-    const room = [sender, receiver].sort().join("_");
-    io.to(room).emit("updateMessageStatus", {
-      id,
-      sender,
+    // 👉 Confirm back to sender
+    socket.emit("messageSentConfirm", {
+      id: msg.id,
+      status: "sent",
       receiver,
-      status: "delivered",
     });
   });
 
-  
-  // ⭐ Seen ONLY when the real receiver opens chat
-socket.on("chatOpened", ({ opener, partner }) => {
-  if (!opener || !partner) return;
-
-  const room = [opener.trim(), partner.trim()].sort().join("_");
-
-  // 👉 Only the receiver of messages can mark them seen
-  io.to(room).emit("updateAllSeen", {
-    opener,        // jisne chat khola
-    receiver: opener,  // ye hi dekh raha hai
-    partner,       // jisko message bheja tha
-    status: "seen"
+  // 🟢 DELIVERED: Receiver got msg
+  socket.on("messageDelivered", ({ id, sender, receiver }) => {
+    const room = [sender.trim(), receiver.trim()].sort().join("_");
+    io.to(room).emit("updateMessageStatus", { id, sender, receiver, status: "delivered" });
   });
-});
 
+  // 🟢 SEEN: Only when real receiver opens chat
+  socket.on("chatOpened", ({ opener, partner }) => {
+    if (!opener || !partner) return;
+    const room = [opener.trim(), partner.trim()].sort().join("_");
+    io.to(room).emit("updateAllSeen", {
+      opener,
+      partner,
+      status: "seen",
+    });
+  });
 
+  // 🟢 ONLINE / OFFLINE STATUS
   socket.on("userOnline", ({ userName }) => {
     io.emit("statusUpdate", { userName, status: "online", lastSeen: null });
   });
 
   socket.on("userOffline", ({ userName }) => {
-    const time = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    const time = new Date().toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
     io.emit("statusUpdate", { userName, status: "offline", lastSeen: time });
   });
 
   socket.on("disconnect", () => {
     if (!socket.userName) return;
-    const time = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    const time = new Date().toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
     io.emit("statusUpdate", {
       userName: socket.userName,
       status: "offline",
