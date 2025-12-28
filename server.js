@@ -6,10 +6,17 @@ import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 
+import { connectDB } from "./config/db.js";
+import authRoutes from "./routes/authRoutes.js";
+import { authMiddleware } from "./middleware/authMiddleware.js";
+
 const app = express();
 app.use(express.json());
 app.use(cors());
 
+connectDB();
+
+app.use("/api/auth", authRoutes);
 app.get("/", (req, res) => res.send("API Running 🚀"));
 
 const server = http.createServer(app);
@@ -17,7 +24,6 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-// 🚀 SOCKET HANDLERS
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
@@ -33,49 +39,42 @@ io.on("connection", (socket) => {
     socket.join(room);
   });
 
-  // 📩 SEND MESSAGE - FIXED
   socket.on("sendMessage", (msg) => {
-    const { sender, receiver } = msg;
+    const { sender, receiver, forList } = msg;
     if (!sender || !receiver) return;
 
     const room = [sender.trim(), receiver.trim()].sort().join("_");
-    
-    // 👉 Receiver ONLY: gets message
+
     io.to(room).emit("receiveMessage", msg);
 
-    // 👉 If receiver not in chat, background alert
-    const inRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
-    if (!inRoom) io.to(receiver).emit("backgroundMessage", msg);
+    if (forList) {
+      io.to(sender).emit("receiveMessage", { ...msg, fromSelf: true });
+    }
 
-    // 👉 Sender only: get confirmation
-    io.to(sender).emit("messageSentConfirm", {
-      id: msg.id,
-      receiver
-    });
+    const inRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
+    if (!inRoom) {
+      io.to(receiver).emit("backgroundMessage", msg);
+    }
+
+    socket.emit("messageSentConfirm", { id: msg.id, status: "sent", receiver });
   });
 
-  // 📌 Delivered
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     const room = [sender.trim(), receiver.trim()].sort().join("_");
-    io.to(room).emit("updateMessageStatus", {
-      id, status: "delivered", sender, receiver
-    });
+    io.to(room).emit("updateMessageStatus", { id, sender, receiver, status: "delivered" });
   });
 
-  // 👁 SEEN (FIXED)
+  // ⭐ LIVE SEEN HANDLER ⭐
   socket.on("chatOpened", ({ opener, partner }) => {
     if (!opener || !partner) return;
-
-    // ⭐ SEEN only when RECEIVER opens chat
-    io.to(partner.trim()).emit("updateAllSeen", {
-      viewer: opener,
-      target: partner
-    });
+    const room = [opener.trim(), partner.trim()].sort().join("_");
+    io.to(room).emit("updateAllSeen", { opener, partner });
   });
 
+  socket.on("disconnect", () => {
+    console.log("❌ Disconnected:", socket.id);
+  });
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () =>
-  console.log(`🚀 SERVER RUNNING ON PORT ${PORT}`)
-);
+server.listen(PORT, () => console.log(`🚀 Server running @ ${PORT}`));
