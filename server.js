@@ -8,6 +8,7 @@ import { Server } from "socket.io";
 
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
+import { authMiddleware } from "./middleware/authMiddleware.js";
 
 const app = express();
 app.use(express.json());
@@ -38,37 +39,32 @@ io.on("connection", (socket) => {
     socket.join(room);
   });
 
-  // 📩 SEND MESSAGE FIXED
   socket.on("sendMessage", (msg) => {
-    const { sender, receiver } = msg;
+    const { sender, receiver, forList } = msg;
     if (!sender || !receiver) return;
 
     const room = [sender.trim(), receiver.trim()].sort().join("_");
-    
-    // only RECEIVER gets message
+
     io.to(room).emit("receiveMessage", msg);
 
-    // background notification if receiver not open
-    const inRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
-    if (!inRoom) io.to(receiver).emit("backgroundMessage", msg);
+    if (forList) {
+      io.to(sender).emit("receiveMessage", { ...msg, fromSelf: true });
+    }
 
-    // sender gets confirmation only
-    io.to(sender).emit("messageSentConfirm", {
-      id: msg.id,
-      receiver
-    });
+    const inRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
+    if (!inRoom) {
+      io.to(receiver).emit("backgroundMessage", msg);
+    }
+
+    socket.emit("messageSentConfirm", { id: msg.id, status: "sent", receiver });
   });
 
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     const room = [sender.trim(), receiver.trim()].sort().join("_");
-    io.to(room).emit("updateMessageStatus", {
-      id,
-      sender,
-      receiver,
-      status: "delivered"
-    });
+    io.to(room).emit("updateMessageStatus", { id, sender, receiver, status: "delivered" });
   });
 
+  // ⭐ LIVE SEEN HANDLER ⭐
   socket.on("chatOpened", ({ opener, partner }) => {
     if (!opener || !partner) return;
     const room = [opener.trim(), partner.trim()].sort().join("_");
