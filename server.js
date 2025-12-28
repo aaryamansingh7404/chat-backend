@@ -8,6 +8,7 @@ import { Server } from "socket.io";
 
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
+import { authMiddleware } from "./middleware/authMiddleware.js";
 
 const app = express();
 app.use(express.json());
@@ -16,7 +17,6 @@ app.use(cors());
 connectDB();
 
 app.use("/api/auth", authRoutes);
-
 app.get("/", (req, res) => res.send("API Running 🚀"));
 
 const server = http.createServer(app);
@@ -40,62 +40,35 @@ io.on("connection", (socket) => {
   });
 
   socket.on("sendMessage", (msg) => {
-    const { sender, receiver } = msg;
+    const { sender, receiver, forList } = msg;
     if (!sender || !receiver) return;
 
     const room = [sender.trim(), receiver.trim()].sort().join("_");
 
     io.to(room).emit("receiveMessage", msg);
 
-    const inRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
+    if (forList) {
+      io.to(sender).emit("receiveMessage", { ...msg, fromSelf: true });
+    }
 
+    const inRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
     if (!inRoom) {
       io.to(receiver).emit("backgroundMessage", msg);
     }
 
     socket.emit("messageSentConfirm", { id: msg.id, status: "sent", receiver });
-
-    // ⭐ FIX ⭐ ALWAYS SEND PREVIEW UPDATE
-    io.to(sender).emit("updateChatListPreview", {
-      user1: sender,
-      user2: receiver,
-      lastMsg: msg.text,
-      time: msg.time,
-      status: "sent"
-    });
-
-    io.to(receiver).emit("updateChatListPreview", {
-      user1: receiver,
-      user2: sender,
-      lastMsg: msg.text,
-      time: msg.time,
-      status: "delivered"
-    });
   });
 
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     const room = [sender.trim(), receiver.trim()].sort().join("_");
     io.to(room).emit("updateMessageStatus", { id, sender, receiver, status: "delivered" });
-
-    // ⭐ FIX ⭐ for ChatList Preview
-    io.to(sender).emit("updateChatListPreview", {
-      user1: sender,
-      user2: receiver,
-      status: "delivered"
-    });
   });
 
+  // ⭐ LIVE SEEN HANDLER ⭐
   socket.on("chatOpened", ({ opener, partner }) => {
     if (!opener || !partner) return;
     const room = [opener.trim(), partner.trim()].sort().join("_");
     io.to(room).emit("updateAllSeen", { opener, partner });
-
-    // ⭐ FIX ⭐ Seen update reflect
-    io.to(partner).emit("updateChatListPreview", {
-      user1: partner,
-      user2: opener,
-      status: "seen"
-    });
   });
 
   socket.on("disconnect", () => {
