@@ -23,14 +23,14 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-// 🟢 ONLINE / LAST SEEN STORE
-let userStatus = {}; 
-// format: { username: { state:"online/offline", lastSeen: 1735559251123 } }
+// 🟢 STORE USER STATUS
+let userStatus = {};
+// { username: { state:"online/offline", lastSeen: timestamp } }
 
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
-  // 🟢 USER INIT
+  // 🟢 INIT USER & ONLINE STATUS
   socket.on("initUser", ({ userName }) => {
     if (!userName) return;
     userName = userName.trim();
@@ -41,14 +41,13 @@ io.on("connection", (socket) => {
     io.emit("userStatusUpdate", { user: userName, ...userStatus[userName] });
   });
 
-  // 🟢 MANUAL ONLINE PING (Optional)
   socket.on("userOnline", (user) => {
     if (!user) return;
+    user = user.trim();
     userStatus[user] = { state: "online", lastSeen: null };
     io.emit("userStatusUpdate", { user, ...userStatus[user] });
   });
 
-  // 🔴 USER OFFLINE
   socket.on("userOffline", (user) => {
     if (!user) return;
     userStatus[user] = { state: "offline", lastSeen: Date.now() };
@@ -69,12 +68,15 @@ io.on("connection", (socket) => {
 
     const room = [sender.trim(), receiver.trim()].sort().join("_");
 
+    // send to room (chat screen)
     io.to(room).emit("receiveMessage", msg);
 
+    // show on chatlist for self
     if (forList) {
       io.to(sender).emit("receiveMessage", { ...msg, fromSelf: true });
     }
 
+    // if receiver not in chat room → background notification
     const inRoom = io.sockets.adapter.rooms.get(room)?.size > 1;
     if (!inRoom) io.to(receiver).emit("backgroundMessage", msg);
 
@@ -85,12 +87,22 @@ io.on("connection", (socket) => {
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     if (!id || !sender || !receiver) return;
     io.to(sender.trim()).emit("updateMessageStatus", {
-      id, status: "delivered", sender, receiver
+      id,
+      status: "delivered",
+      sender,
+      receiver,
     });
   });
 
-  // 🔵 SEEN
+  // 🔵 SEEN WHEN CHAT OPENED (NORMAL)
   socket.on("chatOpened", ({ opener, partner }) => {
+    if (!opener || !partner) return;
+    const room = [opener.trim(), partner.trim()].sort().join("_");
+    io.to(room).emit("updateAllSeen", { opener, partner });
+  });
+
+  // ⚡ ⭐ REAL-TIME SEEN SYNC (Dono Screen Open Ho)
+  socket.on("forceSeenForBoth", ({ opener, partner }) => {
     if (!opener || !partner) return;
     const room = [opener.trim(), partner.trim()].sort().join("_");
     io.to(room).emit("updateAllSeen", { opener, partner });
@@ -102,11 +114,11 @@ io.on("connection", (socket) => {
 
     userStatus[socket.userName] = {
       state: "offline",
-      lastSeen: Date.now()
+      lastSeen: Date.now(),
     };
     io.emit("userStatusUpdate", {
       user: socket.userName,
-      ...userStatus[socket.userName]
+      ...userStatus[socket.userName],
     });
 
     console.log("❌ Disconnected:", socket.id);
