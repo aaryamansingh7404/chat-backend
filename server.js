@@ -1,4 +1,3 @@
-
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -60,9 +59,15 @@ io.on("connection", (socket) => {
     socket.emit("messageSentConfirm", { id: msg.id, status: "sent", receiver });
   });
 
+  // ⚠️ FIXED — Delivered sirf sender ko milega
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
-    const room = [sender.trim(), receiver.trim()].sort().join("_");
-    io.to(room).emit("updateMessageStatus", { id, sender, receiver, status: "delivered" });
+    if (!id || !sender || !receiver) return;
+    io.to(sender.trim()).emit("updateMessageStatus", {
+      id,
+      status: "delivered",
+      sender,
+      receiver
+    });
   });
 
   // ⭐ LIVE SEEN HANDLER ⭐
