@@ -29,24 +29,31 @@ const userStatus = {};
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
-  /* ⭐ User Init / Online */
+  /* ⭐ USER INIT / ONLINE STATUS */
   socket.on("initUser", ({ userName }) => {
     if (!userName) return;
     socket.userName = userName.trim();
     socket.join(socket.userName);
 
-    userStatus[userName] = { online: true, lastSeen: "now" };
+    userStatus[userName] = {
+      online: true,
+      lastSeen: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+
     io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
   });
 
-  /* ⭐ Chat Room Join */
+  /* ⭐ JOIN CHAT ROOM FOR MESSAGEING */
   socket.on("joinRoom", ({ user1, user2 }) => {
     if (!user1 || !user2) return;
     const room = [user1.trim(), user2.trim()].sort().join("_");
     socket.join(room);
   });
 
-  /* ⭐ Send Message (🔥 THIS WAS MISSING) */
+  /* ⭐ SEND MESSAGE */
   socket.on("sendMessage", (msg) => {
     const { sender, receiver, forList } = msg;
     if (!sender || !receiver) return;
@@ -56,32 +63,43 @@ io.on("connection", (socket) => {
     // Room me message
     io.to(room).emit("receiveMessage", msg);
 
-    // Sender ke personal list update
-    if (forList) io.to(sender).emit("receiveMessage", { ...msg, fromSelf: true });
+    // Sender list update
+    if (forList) {
+      io.to(sender).emit("receiveMessage", { ...msg, fromSelf: true });
+    }
 
-    // Delivered confirm
-    socket.emit("messageSentConfirm", { id: msg.id, status: "sent", receiver });
+    // Confirmation
+    socket.emit("messageSentConfirm", {
+      id: msg.id,
+      status: "sent",
+      receiver
+    });
   });
 
-  /* ⭐ Delivered Update */
+  /* ⭐ DELIVERED (DOUBLE TICK) */
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     if (!id || !sender || !receiver) return;
     io.to(sender.trim()).emit("updateMessageStatus", {
       id,
       status: "delivered",
       sender,
-      receiver
+      receiver,
     });
   });
 
-  /* ⭐ Seen Update */
+  /* ⭐ SEEN (READ RECEIPT) */
   socket.on("chatOpened", ({ opener, partner }) => {
     if (!opener || !partner) return;
     const room = [opener.trim(), partner.trim()].sort().join("_");
     io.to(room).emit("updateAllSeen", { opener, partner });
   });
 
-  /* ⭐ DISCONNECT → offline + last seen */
+  /* ⭐ TYPING INDICATOR (OPTIONAL) */
+  socket.on("typing", ({ to, typing }) => {
+    io.to(to).emit("typing", { typing });
+  });
+
+  /* ⭐ DISCONNECT → OFFLINE + LAST SEEN SAVE */
   socket.on("disconnect", () => {
     if (!socket.userName) return;
 
