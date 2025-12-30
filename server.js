@@ -105,6 +105,19 @@ io.on("connection", (socket) => {
 
   // ⭐ TYPING
   socket.on("typing", ({ to, typing }) => io.to(to).emit("typing", { typing }));
+  // ⭐ USER GOES INACTIVE (app background/minimize) ⭐
+socket.on("userInactive", (userName) => {
+  if (!userName) return;
+  userStatus[userName] = {
+    online: false,
+    lastSeen: new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit"
+    }),
+  };
+  io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
+});
+
 
   // ⭐ DISCONNECT / MINIMIZE / NET OFF → LAST SEEN
   socket.on("disconnect", () => {
