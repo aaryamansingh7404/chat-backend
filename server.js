@@ -1,12 +1,12 @@
 import dotenv from "dotenv";
 dotenv.config();
-
 import express from "express";
 import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
+import multer from "multer"; 
 
 const app = express();
 app.use(express.json());
@@ -15,6 +15,44 @@ app.use(cors());
 connectDB();
 app.use("/api/auth", authRoutes);
 app.get("/", (req, res) => res.send("API Running 🚀"));
+
+
+//status part
+let statusList = [];
+
+// Multer storage for uploads
+const storage = multer.diskStorage({
+  destination: "uploads/",
+  filename: (req, file, cb) =>
+    cb(null, Date.now() + path.extname(file.originalname)),
+});
+const upload = multer({ storage });
+
+// Serve uploaded images
+app.use("/uploads", express.static("uploads"));
+
+// 📤 STATUS UPLOAD
+app.post("/upload-status", upload.single("statusFile"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+  const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+
+  statusList.push({
+    id: Date.now(),
+    file: fileUrl,
+    createdAt: Date.now(),
+  });
+
+  console.log("📸 Status Uploaded:", fileUrl);
+  res.json({ message: "Status Uploaded", fileUrl });
+});
+
+// 📥 GET ALL STATUS
+app.get("/get-status", (req, res) => {
+  res.json(statusList);
+});
+
+//status part end
 
 const server = http.createServer(app);
 const io = new Server(server, {
