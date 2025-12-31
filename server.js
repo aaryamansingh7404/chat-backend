@@ -39,22 +39,23 @@ app.use("/uploads", express.static("uploads"));
 
 // 📤 STATUS UPLOAD
 app.post("/upload-status", upload.single("statusFile"), (req, res) => {
-  if (!req.file) {
-    console.log("❌ No file received");
-    return res.status(400).json({ error: "No file uploaded" });
-  }
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+  const { user } = req.body; // 👈 user ka naam mobile se bhejna hoga
 
   const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 
   statusList.push({
     id: Date.now(),
+    user: user || "Unknown",   // 👈 kisne upload kiya
     file: fileUrl,
-    createdAt: Date.now(),
+    time: new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}),
+    date: "Today"
   });
 
-  console.log("📸 Status Uploaded:", fileUrl);
-  return res.json({ message: "Status Uploaded", fileUrl });
+  res.json({ message: "Status Uploaded", fileUrl });
 });
+
 
 // 📥 GET STATUS LIST
 app.get("/get-status", (req, res) => {
