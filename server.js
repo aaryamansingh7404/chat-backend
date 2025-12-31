@@ -1,12 +1,14 @@
 import dotenv from "dotenv";
 dotenv.config();
+
 import express from "express";
 import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
-import multer from "multer"; 
+import multer from "multer";
+import { extname } from "path"; // ⭐ IMPORTANT FIX
 
 const app = express();
 app.use(express.json());
@@ -14,18 +16,22 @@ app.use(cors());
 
 connectDB();
 app.use("/api/auth", authRoutes);
+
+// HOME CHECK
 app.get("/", (req, res) => res.send("API Running 🚀"));
 
-
-//status part
+/* ⭐⭐⭐ STATUS FEATURE START ⭐⭐⭐ */
 let statusList = [];
 
 // Multer storage for uploads
 const storage = multer.diskStorage({
   destination: "uploads/",
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + path.extname(file.originalname)),
+  filename: (req, file, cb) => {
+    const fileExt = extname(file.originalname) || ".jpg"; // ⭐ EXT FIX
+    cb(null, Date.now() + fileExt);
+  },
 });
+
 const upload = multer({ storage });
 
 // Serve uploaded images
@@ -33,7 +39,10 @@ app.use("/uploads", express.static("uploads"));
 
 // 📤 STATUS UPLOAD
 app.post("/upload-status", upload.single("statusFile"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  if (!req.file) {
+    console.log("❌ No file received");
+    return res.status(400).json({ error: "No file uploaded" });
+  }
 
   const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 
@@ -44,28 +53,28 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
   });
 
   console.log("📸 Status Uploaded:", fileUrl);
-  res.json({ message: "Status Uploaded", fileUrl });
+  return res.json({ message: "Status Uploaded", fileUrl });
 });
 
-// 📥 GET ALL STATUS
+// 📥 GET STATUS LIST
 app.get("/get-status", (req, res) => {
   res.json(statusList);
 });
+/* ⭐⭐⭐ STATUS FEATURE END ⭐⭐⭐ */
 
-//status part end
 
+
+/* ⭐⭐⭐ SOCKET.IO CODE (YOUR ORIGINAL) ⭐⭐⭐ */
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-// ⭐ USER STATUS MEMORY
 const userStatus = {};
 
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
-  // ⭐ LOGIN / APP START → ONLINE
   socket.on("initUser", ({ userName }) => {
     if (!userName) return;
     socket.userName = userName.trim();
@@ -82,10 +91,8 @@ io.on("connection", (socket) => {
     io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
   });
 
-  // ⭐ APP ACTIVE (foreground) → ONLINE
   socket.on("userActive", (userName) => {
     if (!userName) return;
-
     userStatus[userName] = {
       online: true,
       lastSeen: new Date().toLocaleTimeString([], {
@@ -93,29 +100,23 @@ io.on("connection", (socket) => {
         minute: "2-digit",
       }),
     };
-
     io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
   });
 
-  // ⭐ ROOM FOR MESSAGES
   socket.on("joinRoom", ({ user1, user2 }) => {
     if (!user1 || !user2) return;
     const room = [user1.trim(), user2.trim()].sort().join("_");
     socket.join(room);
   });
 
-  // ⭐ MESSAGE
   socket.on("sendMessage", (msg) => {
     const { sender, receiver, forList } = msg;
     if (!sender || !receiver) return;
-
     const room = [sender.trim(), receiver.trim()].sort().join("_");
     io.to(room).emit("receiveMessage", msg);
-
     if (forList) {
       io.to(sender).emit("receiveMessage", { ...msg, fromSelf: true });
     }
-
     socket.emit("messageSentConfirm", {
       id: msg.id,
       status: "sent",
@@ -123,7 +124,6 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ⭐ DELIVERED
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     if (!id || !sender || !receiver) return;
     io.to(sender.trim()).emit("updateMessageStatus", {
@@ -134,33 +134,28 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ⭐ SEEN
   socket.on("chatOpened", ({ opener, partner }) => {
     if (!opener || !partner) return;
     const room = [opener.trim(), partner.trim()].sort().join("_");
     io.to(room).emit("updateAllSeen", { opener, partner });
   });
 
-  // ⭐ TYPING
   socket.on("typing", ({ to, typing }) => io.to(to).emit("typing", { typing }));
-  // ⭐ USER GOES INACTIVE (app background/minimize) ⭐
-socket.on("userInactive", (userName) => {
-  if (!userName) return;
-  userStatus[userName] = {
-    online: false,
-    lastSeen: new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit"
-    }),
-  };
-  io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
-});
 
+  socket.on("userInactive", (userName) => {
+    if (!userName) return;
+    userStatus[userName] = {
+      online: false,
+      lastSeen: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+    io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
+  });
 
-  // ⭐ DISCONNECT / MINIMIZE / NET OFF → LAST SEEN
   socket.on("disconnect", () => {
     if (!socket.userName) return;
-
     userStatus[socket.userName] = {
       online: false,
       lastSeen: new Date().toLocaleTimeString([], {
@@ -178,5 +173,7 @@ socket.on("userInactive", (userName) => {
   });
 });
 
+
+/* ⭐⭐⭐ START SERVER ⭐⭐⭐ */
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server running @ ${PORT}`));
