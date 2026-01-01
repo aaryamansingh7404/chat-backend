@@ -20,6 +20,18 @@ app.use("/api/auth", authRoutes);
 // HOME CHECK
 app.get("/", (req, res) => res.send("API Running 🚀"));
 
+// 🕒 India Time Zone Function
+function getIndiaTime() {
+  return new Date().toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
+}
+
+
 /* ⭐⭐⭐ STATUS FEATURE START ⭐⭐⭐ */
 let statusList = [];
 
@@ -37,23 +49,26 @@ const upload = multer({ storage });
 // Serve uploaded images
 app.use("/uploads", express.static("uploads"));
 
-// 📤 STATUS UPLOAD
+
+// 📤 STATUS UPLOAD - (ADD STATUS)
 app.post("/upload-status", upload.single("statusFile"), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-  const { user } = req.body; // 👈 user ka naam mobile se bhejna hoga
+  const { user } = req.body;
 
   const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 
-  statusList.push({
-    id: Date.now(),
-    user: user || "Unknown",   // 👈 kisne upload kiya
+  const newStatus = {
+    id: Date.now().toString(),
+    user: user || "Unknown",
     file: fileUrl,
-    time: new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}),
-    date: "Today"
-  });
+    time: getIndiaTime(),
+    date: "Today",
+  };
 
-  res.json({ message: "Status Uploaded", fileUrl });
+  statusList.push(newStatus);
+
+  res.json({ message: "Status Uploaded", data: newStatus });
 });
 
 
@@ -61,7 +76,24 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
 app.get("/get-status", (req, res) => {
   res.json(statusList);
 });
+
+
+// 🗑️ DELETE STATUS - (Only Owner Status Delete)
+app.post("/delete-status", (req, res) => {
+  const { id } = req.body;
+
+  const before = statusList.length;
+  statusList = statusList.filter((s) => s.id.toString() !== id.toString());
+  const after = statusList.length;
+
+  if (before === after) {
+    return res.status(404).json({ message: "Status Not Found" });
+  }
+
+  res.json({ message: "Deleted Successfully" });
+});
 /* ⭐⭐⭐ STATUS FEATURE END ⭐⭐⭐ */
+
 
 
 
@@ -83,10 +115,7 @@ io.on("connection", (socket) => {
 
     userStatus[userName] = {
       online: true,
-      lastSeen: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      lastSeen: getIndiaTime(),
     };
 
     io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
@@ -96,10 +125,7 @@ io.on("connection", (socket) => {
     if (!userName) return;
     userStatus[userName] = {
       online: true,
-      lastSeen: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      lastSeen: getIndiaTime(),
     };
     io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
   });
@@ -114,9 +140,9 @@ io.on("connection", (socket) => {
     const { sender, receiver, forList } = msg;
     if (!sender || !receiver) return;
     const room = [sender.trim(), receiver.trim()].sort().join("_");
-    io.to(room).emit("receiveMessage", msg);
+    io.to(room).emit("receiveMessage", { ...msg, time: getIndiaTime() });
     if (forList) {
-      io.to(sender).emit("receiveMessage", { ...msg, fromSelf: true });
+      io.to(sender).emit("receiveMessage", { ...msg, time: getIndiaTime(), fromSelf: true });
     }
     socket.emit("messageSentConfirm", {
       id: msg.id,
@@ -147,10 +173,7 @@ io.on("connection", (socket) => {
     if (!userName) return;
     userStatus[userName] = {
       online: false,
-      lastSeen: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      lastSeen: getIndiaTime(),
     };
     io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
   });
@@ -159,10 +182,7 @@ io.on("connection", (socket) => {
     if (!socket.userName) return;
     userStatus[socket.userName] = {
       online: false,
-      lastSeen: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      lastSeen:getIndiaTime(),
     };
 
     io.emit("statusUpdate", {
