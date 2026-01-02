@@ -32,27 +32,25 @@ function getIndiaTime() {
 }
 
 
-/* ⭐⭐⭐ STATUS FEATURE START ⭐⭐⭐ */
 let statusList = [];
+let statusViews = {};
 
-// Multer storage for uploads
 const storage = multer.diskStorage({
   destination: "uploads/",
   filename: (req, file, cb) => {
-    const fileExt = extname(file.originalname) || ".jpg"; // ⭐ EXT FIX
+    const fileExt = extname(file.originalname) || ".jpg";
     cb(null, Date.now() + fileExt);
   },
 });
 
 const upload = multer({ storage });
 
-// Serve uploaded images
 app.use("/uploads", express.static("uploads"));
 
-
-// 📤 STATUS UPLOAD - (ADD STATUS)
 app.post("/upload-status", upload.single("statusFile"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
 
   const { user } = req.body;
 
@@ -68,22 +66,57 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
 
   statusList.push(newStatus);
 
-  res.json({ message: "Status Uploaded", data: newStatus });
+  res.json({
+    message: "Status Uploaded",
+    data: newStatus,
+  });
 });
 
-
-// 📥 GET STATUS LIST
 app.get("/get-status", (req, res) => {
   res.json(statusList);
 });
 
+app.post("/status/view", (req, res) => {
+  const { statusId, viewer } = req.body;
 
-// 🗑️ DELETE STATUS - (Only Owner Status Delete)
+  if (!statusId || !viewer) {
+    return res.status(400).json({ message: "Missing data" });
+  }
+
+  if (!statusViews[statusId]) {
+    statusViews[statusId] = [];
+  }
+
+  if (!statusViews[statusId].includes(viewer)) {
+    statusViews[statusId].push(viewer);
+  }
+
+  res.json({
+    message: "View recorded",
+    count: statusViews[statusId].length,
+  });
+});
+
+app.get("/status/views/:statusId", (req, res) => {
+  const { statusId } = req.params;
+
+  res.json({
+    count: statusViews[statusId]?.length || 0,
+    users: statusViews[statusId] || [],
+  });
+});
+
 app.post("/delete-status", (req, res) => {
   const { id } = req.body;
 
   const before = statusList.length;
-  statusList = statusList.filter((s) => s.id.toString() !== id.toString());
+
+  statusList = statusList.filter(
+    (s) => s.id.toString() !== id.toString()
+  );
+
+  delete statusViews[id];
+
   const after = statusList.length;
 
   if (before === after) {
@@ -92,8 +125,6 @@ app.post("/delete-status", (req, res) => {
 
   res.json({ message: "Deleted Successfully" });
 });
-/* ⭐⭐⭐ STATUS FEATURE END ⭐⭐⭐ */
-
 
 
 
