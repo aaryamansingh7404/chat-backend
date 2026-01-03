@@ -90,11 +90,9 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
 });
 
 app.get("/get-status", (req, res) => {
-  const sorted = [...statusList].sort(
-    (a, b) => b.createdAt - a.createdAt
-  );
-  res.json(sorted);
+  res.json(statusList); // old → new order preserved
 });
+
 
 
 app.post("/status/view", (req, res) => {
