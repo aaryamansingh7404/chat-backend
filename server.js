@@ -25,7 +25,6 @@ function getIndiaTime() {
   return new Date().toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
     hour12: true,
     timeZone: "Asia/Kolkata",
   });
@@ -34,6 +33,25 @@ function getIndiaTime() {
 
 let statusList = [];
 let statusViews = {};
+
+// 🧹 AUTO DELETE STATUS AFTER 24 HOURS (runs every 1 hour)
+setInterval(() => {
+  const now = Date.now();
+
+  statusList = statusList.filter(
+    (s) => now - s.createdAt < 24 * 60 * 60 * 1000
+  );
+
+  // optional: clean views also
+  Object.keys(statusViews).forEach((id) => {
+    if (!statusList.find((s) => s.id === id)) {
+      delete statusViews[id];
+    }
+  });
+}, 60 * 60 * 1000); // ⏱️ every 1 hour
+
+
+
 
 const storage = multer.diskStorage({
   destination: "uploads/",
@@ -60,8 +78,7 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
     id: Date.now().toString(),
     user: user || "Unknown",
     file: fileUrl,
-    time: getIndiaTime(),
-    date: "Today",
+    createdAt: Date.now(),
   };
 
   statusList.push(newStatus);
@@ -73,8 +90,12 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
 });
 
 app.get("/get-status", (req, res) => {
-  res.json(statusList);
+  const sorted = [...statusList].sort(
+    (a, b) => b.createdAt - a.createdAt
+  );
+  res.json(sorted);
 });
+
 
 app.post("/status/view", (req, res) => {
   const { statusId, viewer } = req.body;
