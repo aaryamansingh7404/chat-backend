@@ -30,7 +30,6 @@ function getIndiaTime() {
   });
 }
 
-
 let statusList = [];
 let statusViews = {};
 
@@ -49,9 +48,6 @@ setInterval(() => {
     }
   });
 }, 60 * 60 * 1000); // ⏱️ every 1 hour
-
-
-
 
 const storage = multer.diskStorage({
   destination: "uploads/",
@@ -72,7 +68,9 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
 
   const { user } = req.body;
 
-  const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+  const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${
+    req.file.filename
+  }`;
 
   const newStatus = {
     id: Date.now().toString(),
@@ -93,8 +91,6 @@ app.get("/get-status", (req, res) => {
   res.json(statusList); // old → new order preserved
 });
 
-
-
 app.post("/status/view", (req, res) => {
   const { statusId, viewer } = req.body;
 
@@ -106,15 +102,23 @@ app.post("/status/view", (req, res) => {
     statusViews[statusId] = [];
   }
 
-  if (!statusViews[statusId].includes(viewer)) {
-    statusViews[statusId].push(viewer);
+  const alreadySeen = statusViews[statusId].find(
+    (v) => v.user === viewer
+  );
+
+  if (!alreadySeen) {
+    statusViews[statusId].push({
+      user: viewer,
+      seenAt: Date.now(),
+    });
   }
 
   res.json({
-    message: "View recorded",
     count: statusViews[statusId].length,
+    users: statusViews[statusId],
   });
 });
+
 
 app.get("/status/views/:statusId", (req, res) => {
   const { statusId } = req.params;
@@ -130,9 +134,7 @@ app.post("/delete-status", (req, res) => {
 
   const before = statusList.length;
 
-  statusList = statusList.filter(
-    (s) => s.id.toString() !== id.toString()
-  );
+  statusList = statusList.filter((s) => s.id.toString() !== id.toString());
 
   delete statusViews[id];
 
@@ -144,8 +146,6 @@ app.post("/delete-status", (req, res) => {
 
   res.json({ message: "Deleted Successfully" });
 });
-
-
 
 /* ⭐⭐⭐ SOCKET.IO CODE (YOUR ORIGINAL) ⭐⭐⭐ */
 const server = http.createServer(app);
@@ -192,7 +192,11 @@ io.on("connection", (socket) => {
     const room = [sender.trim(), receiver.trim()].sort().join("_");
     io.to(room).emit("receiveMessage", { ...msg, time: getIndiaTime() });
     if (forList) {
-      io.to(sender).emit("receiveMessage", { ...msg, time: getIndiaTime(), fromSelf: true });
+      io.to(sender).emit("receiveMessage", {
+        ...msg,
+        time: getIndiaTime(),
+        fromSelf: true,
+      });
     }
     socket.emit("messageSentConfirm", {
       id: msg.id,
@@ -232,7 +236,7 @@ io.on("connection", (socket) => {
     if (!socket.userName) return;
     userStatus[socket.userName] = {
       online: false,
-      lastSeen:getIndiaTime(),
+      lastSeen: getIndiaTime(),
     };
 
     io.emit("statusUpdate", {
@@ -243,7 +247,6 @@ io.on("connection", (socket) => {
     console.log("❌ Disconnected:", socket.id);
   });
 });
-
 
 /* ⭐⭐⭐ START SERVER ⭐⭐⭐ */
 const PORT = process.env.PORT || 5000;
