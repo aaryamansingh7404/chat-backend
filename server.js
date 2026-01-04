@@ -96,9 +96,9 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
       file: fileUrl,
       type: type || inferredType,
       duration:
-        inferredType === "video"
-          ? Math.min(Number(duration) || 30000, 30000) // 🔥 max 30 sec
-          : 5000,
+  inferredType === "video"
+    ? Math.min(Number(duration || 0) * 1000, 30000) // 🔥 seconds → ms
+    : 5000,
       createdAt: Date.now(),
     };
     
