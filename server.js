@@ -57,7 +57,19 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    if (
+      file.mimetype.startsWith("image") ||
+      file.mimetype.startsWith("video")
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image/video allowed"));
+    }
+  },
+});
 
 app.use("/uploads", express.static("uploads"));
 
@@ -66,16 +78,20 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
     return res.status(400).json({ error: "No file uploaded" });
   }
 
-  const { user } = req.body;
+  const { user, type  } = req.body;
 
   const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${
     req.file.filename
   }`;
 
+  const inferredType = req.file.mimetype.startsWith("video")
+    ? "video"
+    : "image";
   const newStatus = {
     id: Date.now().toString(),
     user: user || "Unknown",
     file: fileUrl,
+    type: type || inferredType,  
     createdAt: Date.now(),
   };
 
