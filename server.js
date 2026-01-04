@@ -59,6 +59,9 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB max
+  },
   fileFilter: (req, file, cb) => {
     if (
       file.mimetype.startsWith("image") ||
@@ -78,7 +81,7 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
     return res.status(400).json({ error: "No file uploaded" });
   }
 
-  const { user, type  } = req.body;
+  const { user, type, duration } = req.body;
 
   const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${
     req.file.filename
@@ -87,13 +90,18 @@ app.post("/upload-status", upload.single("statusFile"), (req, res) => {
   const inferredType = req.file.mimetype.startsWith("video")
     ? "video"
     : "image";
-  const newStatus = {
-    id: Date.now().toString(),
-    user: user || "Unknown",
-    file: fileUrl,
-    type: type || inferredType,  
-    createdAt: Date.now(),
-  };
+    const newStatus = {
+      id: Date.now().toString(),
+      user: user || "Unknown",
+      file: fileUrl,
+      type: type || inferredType,
+      duration:
+        inferredType === "video"
+          ? Math.min(Number(duration) || 30000, 30000) // 🔥 max 30 sec
+          : 5000,
+      createdAt: Date.now(),
+    };
+    
 
   statusList.push(newStatus);
 
