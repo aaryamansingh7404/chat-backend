@@ -223,11 +223,12 @@ io.on("connection", (socket) => {
     };
   
     // ⭐ STATUS REPLY KE LIYE SPECIAL EMIT
-    if (replyTag === "status_reply") {
-      io.to(receiver.trim()).emit("statusReplyBadge", finalMsg);   // receiver ko alag event
+    if (msg.replyTag === "status_reply") {
+      io.to(receiver.trim()).emit("receiveMessage", { ...msg, time: getIndiaTime() });
     } else {
-      io.to(room).emit("receiveMessage", finalMsg);
+      io.to(room).emit("receiveMessage", { ...msg, time: getIndiaTime() });
     }
+    
   
     if (forList) {
       io.to(sender.trim()).emit("receiveMessage", {
