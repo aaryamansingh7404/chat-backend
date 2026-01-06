@@ -218,37 +218,45 @@ io.on("connection", (socket) => {
 
   socket.on("sendMessage", (msg) => {
     const { sender, receiver } = msg;
-
+  
     if (!sender || !receiver) return;
-
+  
     const room = [sender.trim(), receiver.trim()].sort().join("_");
-
-    // 🟢 Prevent duplicate emit from same socket (newly add)
+  
+    // Prevent duplicate precaution
     if (msg.__processed) return;
     msg.__processed = true;
-
+  
     io.to(room).emit("receiveMessage", {
       ...msg,
       time: getIndiaTime(),
     });
-
+  
+    // sender ko sent confirm
     socket.emit("messageSentConfirm", {
       id: msg.id,
       status: "sent",
-      receiver: receiver.trim(),           // update
+      receiver: receiver.trim(),
+    });
+  
+    // ⭐ NEW – AUTO DELIVERED STATUS
+    io.to(receiver.trim()).emit("updateMessageStatus", {
+      id: msg.id,
+      status: "delivered",
     });
   });
-
+  
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     if (!id || !sender || !receiver) return;
-
+  
     io.to(sender.trim()).emit("updateMessageStatus", {
       id,
       status: "delivered",
-      sender: sender.trim(),               // update - consistency
-      receiver: receiver.trim(),           // update
+      sender: sender.trim(),
+      receiver: receiver.trim(),
     });
   });
+  
 
   socket.on("chatOpened", ({ opener, partner }) => {
     if (!partner) return;                 // newly add - better logic
