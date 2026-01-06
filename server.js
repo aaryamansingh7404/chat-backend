@@ -211,23 +211,38 @@ io.on("connection", (socket) => {
   });
 
   socket.on("sendMessage", (msg) => {
-    const { sender, receiver, forList } = msg;
+    const { sender, receiver, replyTag, forList } = msg;
+  
     if (!sender || !receiver) return;
+  
     const room = [sender.trim(), receiver.trim()].sort().join("_");
-    io.to(room).emit("receiveMessage", { ...msg, time: getIndiaTime() });
+  
+    const finalMsg = {
+      ...msg,
+      time: getIndiaTime(),
+    };
+  
+    // ⭐ STATUS REPLY KE LIYE SPECIAL EMIT
+    if (replyTag === "status_reply") {
+      io.to(receiver.trim()).emit("statusReplyBadge", finalMsg);   // receiver ko alag event
+    } else {
+      io.to(room).emit("receiveMessage", finalMsg);
+    }
+  
     if (forList) {
-      io.to(sender).emit("receiveMessage", {
-        ...msg,
-        time: getIndiaTime(),
+      io.to(sender.trim()).emit("receiveMessage", {
+        ...finalMsg,
         fromSelf: true,
       });
     }
+  
     socket.emit("messageSentConfirm", {
       id: msg.id,
       status: "sent",
       receiver,
     });
   });
+  
 
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     if (!id || !sender || !receiver) return;
