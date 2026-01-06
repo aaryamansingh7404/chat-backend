@@ -222,13 +222,21 @@ io.on("connection", (socket) => {
       time: getIndiaTime(),
     };
   
-    // ⭐ STATUS REPLY KE LIYE SPECIAL EMIT
-    if (msg.replyTag === "status_reply") {
-      io.to(receiver.trim()).emit("receiveMessage", { ...msg, time: getIndiaTime() });
+    // ⭐ STATUS REPLY SPECIAL ROUTING
+    if (replyTag === "status_reply") {
+      io.to(receiver.trim()).emit("receiveMessage", {
+        ...finalMsg,
+        replyTag: "status_reply",
+      });
+  
+      io.to(sender.trim()).emit("statusReplySent", {
+        to: receiver.trim(),
+        text: msg.text,
+        time: finalMsg.time,
+      });
     } else {
-      io.to(room).emit("receiveMessage", { ...msg, time: getIndiaTime() });
+      io.to(room).emit("receiveMessage", finalMsg);
     }
-    
   
     if (forList) {
       io.to(sender.trim()).emit("receiveMessage", {
@@ -243,6 +251,7 @@ io.on("connection", (socket) => {
       receiver,
     });
   });
+  
   
 
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
