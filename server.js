@@ -184,118 +184,135 @@ io.on("connection", (socket) => {
 
   socket.on("initUser", ({ userName }) => {
     if (!userName) return;
-    socket.userName = userName.trim();
-    socket.join(socket.userName);
 
-    userStatus[userName] = {
+    const cleanUser = userName.trim();      // newly add
+    socket.userName = cleanUser;
+    socket.join(cleanUser);
+
+    userStatus[cleanUser] = {
       online: true,
       lastSeen: getIndiaTime(),
     };
 
-    io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
+    io.emit("statusUpdate", { user: cleanUser, ...userStatus[cleanUser] });
   });
 
   socket.on("userActive", (userName) => {
     if (!userName) return;
-    userStatus[userName] = {
+
+    const cleanUser = userName.trim();      // newly add
+    userStatus[cleanUser] = {
       online: true,
       lastSeen: getIndiaTime(),
     };
-    io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
+
+    io.emit("statusUpdate", { user: cleanUser, ...userStatus[cleanUser] });
   });
 
   socket.on("joinRoom", ({ user1, user2 }) => {
     if (!user1 || !user2) return;
+
     const room = [user1.trim(), user2.trim()].sort().join("_");
     socket.join(room);
   });
 
   socket.on("sendMessage", (msg) => {
-    const { sender, receiver, replyTag, forList } = msg;
-  
+    const { sender, receiver } = msg;
+
     if (!sender || !receiver) return;
-  
+
     const room = [sender.trim(), receiver.trim()].sort().join("_");
-  
-    const finalMsg = {
+
+    // 🟢 Prevent duplicate emit from same socket (newly add)
+    if (msg.__processed) return;
+    msg.__processed = true;
+
+    io.to(room).emit("receiveMessage", {
       ...msg,
       time: getIndiaTime(),
-    };
-  
-    // ⭐ STATUS REPLY SPECIAL ROUTING
-    if (replyTag === "status_reply") {
-      io.to(receiver.trim()).emit("receiveMessage", {
-        ...finalMsg,
-        replyTag: "status_reply",
-      });
-  
-      io.to(sender.trim()).emit("statusReplySent", {
-        to: receiver.trim(),
-        text: msg.text,
-        time: finalMsg.time,
-      });
-    } else {
-      io.to(room).emit("receiveMessage", finalMsg);
-    }
-  
-    if (forList) {
-      io.to(sender.trim()).emit("receiveMessage", {
-        ...finalMsg,
-        fromSelf: true,
-      });
-    }
-  
+    });
+
     socket.emit("messageSentConfirm", {
       id: msg.id,
       status: "sent",
-      receiver,
+      receiver: receiver.trim(),           // update
     });
   });
-  
-  
 
   socket.on("messageDelivered", ({ id, sender, receiver }) => {
     if (!id || !sender || !receiver) return;
+
     io.to(sender.trim()).emit("updateMessageStatus", {
       id,
       status: "delivered",
-      sender,
-      receiver,
+      sender: sender.trim(),               // update - consistency
+      receiver: receiver.trim(),           // update
     });
   });
 
   socket.on("chatOpened", ({ opener, partner }) => {
-    if (!opener || !partner) return;
+    if (!partner) return;                 // newly add - better logic
+
     const room = [opener.trim(), partner.trim()].sort().join("_");
-    io.to(room).emit("updateAllSeen", { opener, partner });
+
+    io.to(room).emit("updateAllSeen", {
+      opener: opener.trim(),              // update
+      partner: partner.trim(),            // update
+    });
   });
 
-  socket.on("typing", ({ to, typing }) => io.to(to).emit("typing", { typing }));
+  // 🟢 Newly Add - instant seen when chat already open on both devices
+  socket.on("chatScreenFocused", ({ user, partner }) => {
+    if (!user || !partner) return;
+
+    const room = [user.trim(), partner.trim()].sort().join("_");
+
+    io.to(room).emit("updateAllSeen", {
+      opener: user.trim(),
+      partner: partner.trim(),
+    });
+  });
+
+  socket.on("typing", ({ to, typing }) => {
+    if (!to) return;                      // safety add
+    io.to(to.trim()).emit("typing", { typing });
+  });
 
   socket.on("userInactive", (userName) => {
     if (!userName) return;
-    userStatus[userName] = {
-      online: false,
-      lastSeen: getIndiaTime(),
-    };
-    io.emit("statusUpdate", { user: userName, ...userStatus[userName] });
-  });
 
-  socket.on("disconnect", () => {
-    if (!socket.userName) return;
-    userStatus[socket.userName] = {
+    const cleanUser = userName.trim();    // newly add
+
+    userStatus[cleanUser] = {
       online: false,
       lastSeen: getIndiaTime(),
     };
 
     io.emit("statusUpdate", {
-      user: socket.userName,
-      ...userStatus[socket.userName],
+      user: cleanUser,
+      ...userStatus[cleanUser],
+    });
+  });
+
+  socket.on("disconnect", () => {
+    if (!socket.userName) return;
+
+    const cleanUser = socket.userName.trim();   // newly add
+
+    userStatus[cleanUser] = {
+      online: false,
+      lastSeen: getIndiaTime(),
+    };
+
+    io.emit("statusUpdate", {
+      user: cleanUser,
+      ...userStatus[cleanUser],
     });
 
     console.log("❌ Disconnected:", socket.id);
   });
 });
+
 
 /* ⭐⭐⭐ START SERVER ⭐⭐⭐ */
 const PORT = process.env.PORT || 5000;
